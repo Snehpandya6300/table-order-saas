@@ -54,6 +54,7 @@ export const create = mutation({
     tableId: v.id("tables"),
     tableLabel: v.string(),
     customerName: v.optional(v.string()),
+    customerPhone: v.string(),
     items: v.array(
       v.object({
         menuItemId: v.id("menuItems"),

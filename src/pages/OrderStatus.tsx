@@ -2,20 +2,16 @@ import { useParams } from "react-router";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
 import {
   QrCode,
-  Clock,
   CheckCircle2,
   ChefHat,
   Utensils,
-  ArrowLeft,
   XCircle,
+  Phone,
+  Clock,
 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 const STATUS_STEPS = [
   { key: "received", label: "Received", icon: Clock },
@@ -25,7 +21,14 @@ const STATUS_STEPS = [
   { key: "served", label: "Served", icon: CheckCircle2 },
 ] as const;
 
-const STATUS_ORDER = ["received", "accepted", "preparing", "ready", "served", "cancelled"];
+const STATUS_ORDER = [
+  "received",
+  "accepted",
+  "preparing",
+  "ready",
+  "served",
+  "cancelled",
+];
 
 export default function OrderStatus() {
   const { orderId } = useParams<{ orderId: string }>();
@@ -70,7 +73,6 @@ export default function OrderStatus() {
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-6 space-y-6">
-        {/* Order Info */}
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
@@ -84,6 +86,14 @@ export default function OrderStatus() {
                 {order.customerName}
               </p>
             )}
+            {order.customerPhone && (
+              <div className="flex items-center gap-1 mt-1">
+                <Phone className="h-3 w-3 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
+                  {order.customerPhone}
+                </span>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               {new Date(order.createdAt).toLocaleTimeString([], {
                 hour: "2-digit",
@@ -93,7 +103,6 @@ export default function OrderStatus() {
           </CardContent>
         </Card>
 
-        {/* Status Progress */}
         {isCancelled ? (
           <Card className="border-red-200 bg-red-50/50">
             <CardContent className="p-4 flex items-center gap-3">
@@ -110,7 +119,7 @@ export default function OrderStatus() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {STATUS_STEPS.map((step, i) => {
+            {STATUS_STEPS.map((step) => {
               const stepIndex = STATUS_ORDER.indexOf(step.key);
               const isCompleted = stepIndex <= currentStepIndex;
               const isCurrent = step.key === order.status;
@@ -139,7 +148,11 @@ export default function OrderStatus() {
                   <div className="flex-1">
                     <p
                       className={`text-sm font-medium ${
-                        isCurrent ? "text-foreground" : isCompleted ? "text-foreground" : "text-muted-foreground"
+                        isCurrent
+                          ? "text-foreground"
+                          : isCompleted
+                            ? "text-foreground"
+                            : "text-muted-foreground"
                       }`}
                     >
                       {step.label}
@@ -159,7 +172,6 @@ export default function OrderStatus() {
           </div>
         )}
 
-        {/* Ordered Items */}
         <Card>
           <CardContent className="p-4">
             <h3 className="text-sm font-semibold mb-3">Items Ordered</h3>
@@ -182,7 +194,9 @@ export default function OrderStatus() {
             </div>
             <div className="mt-3 pt-3 border-t flex justify-between text-sm font-semibold">
               <span>Total</span>
-              <span className="tabular-nums">${order.totalAmount.toFixed(2)}</span>
+              <span className="tabular-nums">
+                ${order.totalAmount.toFixed(2)}
+              </span>
             </div>
           </CardContent>
         </Card>

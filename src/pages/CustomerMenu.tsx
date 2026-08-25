@@ -6,7 +6,6 @@ import { Id } from "../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Sheet,
   SheetContent,
@@ -24,10 +23,8 @@ import {
   X,
   Send,
   CheckCircle2,
-  Clock,
-  ChefHat,
-  Utensils,
   ArrowLeft,
+  Phone,
 } from "lucide-react";
 
 interface CartItem {
@@ -62,13 +59,12 @@ export default function CustomerMenu() {
   const [itemQuantity, setItemQuantity] = useState(1);
   const [itemNote, setItemNote] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
 
-  const table = useQuery(
-    api.tables.getByQrToken,
-    token ? { token } : "skip",
-  );
+  const table = useQuery(api.tables.getByQrToken, token ? { token } : "skip");
   const restaurant = useQuery(
     api.restaurants.getById,
     table?.restaurantId ? { id: table.restaurantId } : "skip",
@@ -89,7 +85,6 @@ export default function CustomerMenu() {
   );
   const createOrder = useMutation(api.orders.create);
 
-  // Reset search when table changes
   useEffect(() => {
     setSearchQuery("");
     setActiveCategory(null);
@@ -111,12 +106,9 @@ export default function CustomerMenu() {
   }, [menuItems]);
 
   const displayedItems = useMemo(() => {
-    if (searchQuery.trim() && searchResults) {
-      return searchResults;
-    }
-    if (activeCategory) {
+    if (searchQuery.trim() && searchResults) return searchResults;
+    if (activeCategory)
       return visibleItems.filter((item) => item.categoryId === activeCategory);
-    }
     return visibleItems;
   }, [searchQuery, searchResults, activeCategory, visibleItems]);
 
@@ -173,6 +165,12 @@ export default function CustomerMenu() {
 
   const handleOrder = async () => {
     if (!table || !restaurant || cart.length === 0) return;
+    const phone = customerPhone.replace(/\s/g, "");
+    if (!phone || phone.length < 6) {
+      setPhoneError("Please enter a valid mobile number.");
+      return;
+    }
+    setPhoneError("");
     setIsOrdering(true);
     try {
       const orderId = await createOrder({
@@ -180,6 +178,7 @@ export default function CustomerMenu() {
         tableId: table._id,
         tableLabel: table.label,
         customerName: customerName.trim() || undefined,
+        customerPhone: phone,
         items: cart.map((c) => ({
           menuItemId: c.menuItemId,
           name: c.name,
@@ -205,18 +204,14 @@ export default function CustomerMenu() {
     setItemNote("");
   };
 
-  // Loading state
   if (!token || table === undefined) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
-        </div>
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
     );
   }
 
-  // Invalid token
   if (!table) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
@@ -234,7 +229,6 @@ export default function CustomerMenu() {
     );
   }
 
-  // Order success
   if (orderSuccess) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
@@ -264,7 +258,6 @@ export default function CustomerMenu() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border/50 bg-background/90 backdrop-blur-lg">
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
           <div>
@@ -292,7 +285,6 @@ export default function CustomerMenu() {
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-4">
-        {/* Search */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -311,7 +303,6 @@ export default function CustomerMenu() {
           )}
         </div>
 
-        {/* Category Pills (only when not searching) */}
         {!searchQuery.trim() && visibleCategories.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none">
             <button
@@ -340,7 +331,6 @@ export default function CustomerMenu() {
           </div>
         )}
 
-        {/* Menu Items */}
         <div className="space-y-3">
           {displayedItems.length === 0 ? (
             <div className="py-16 text-center">
@@ -406,7 +396,6 @@ export default function CustomerMenu() {
         </div>
       </div>
 
-      {/* Floating Cart Button */}
       {cartCount > 0 && (
         <div className="fixed bottom-6 left-4 right-4 z-50 mx-auto max-w-2xl">
           <Button
@@ -428,7 +417,6 @@ export default function CustomerMenu() {
           <SheetHeader>
             <SheetTitle>Your Order</SheetTitle>
           </SheetHeader>
-
           <div className="flex-1 overflow-y-auto py-4">
             {cart.length === 0 ? (
               <div className="py-12 text-center">
@@ -441,7 +429,32 @@ export default function CustomerMenu() {
               <div className="space-y-3">
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                    Your Name
+                    Mobile Number <span className="text-destructive">*</span>
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      type="tel"
+                      placeholder="e.g. +1 234 567 890"
+                      className="pl-9"
+                      value={customerPhone}
+                      onChange={(e) => {
+                        setCustomerPhone(e.target.value);
+                        if (phoneError) setPhoneError("");
+                      }}
+                      required
+                    />
+                  </div>
+                  {phoneError && (
+                    <p className="text-[11px] text-destructive mt-1">
+                      {phoneError}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Your Name{" "}
+                    <span className="text-muted-foreground/60">(optional)</span>
                   </label>
                   <Input
                     placeholder="Optional"
@@ -492,18 +505,19 @@ export default function CustomerMenu() {
               </div>
             )}
           </div>
-
           {cart.length > 0 && (
             <SheetFooter className="border-t pt-4">
               <div className="w-full space-y-3">
                 <div className="flex justify-between text-sm font-semibold">
                   <span>Total</span>
-                  <span className="tabular-nums">${cartTotal.toFixed(2)}</span>
+                  <span className="tabular-nums">
+                    ${cartTotal.toFixed(2)}
+                  </span>
                 </div>
                 <Button
                   className="cursor-pointer w-full h-12"
                   onClick={handleOrder}
-                  disabled={isOrdering}
+                  disabled={isOrdering || !customerPhone.replace(/\s/g, "")}
                 >
                   {isOrdering ? (
                     "Placing Order..."
@@ -531,7 +545,6 @@ export default function CustomerMenu() {
               <SheetHeader>
                 <SheetTitle>{selectedItem.name}</SheetTitle>
               </SheetHeader>
-
               <div className="flex-1 overflow-y-auto py-4">
                 {selectedItem.imageUrl ? (
                   <img
@@ -544,13 +557,11 @@ export default function CustomerMenu() {
                     🍽️
                   </div>
                 )}
-
                 {selectedItem.description && (
                   <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                     {selectedItem.description}
                   </p>
                 )}
-
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-xl font-bold tabular-nums">
                     ${selectedItem.price.toFixed(2)}
@@ -565,7 +576,6 @@ export default function CustomerMenu() {
                     </Badge>
                   )}
                 </div>
-
                 <div className="space-y-4">
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
@@ -577,7 +587,6 @@ export default function CustomerMenu() {
                       onChange={(e) => setItemNote(e.target.value)}
                     />
                   </div>
-
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                       Quantity
@@ -608,7 +617,6 @@ export default function CustomerMenu() {
                   </div>
                 </div>
               </div>
-
               <SheetFooter className="border-t pt-4">
                 <Button
                   className="cursor-pointer w-full h-12"

@@ -10,7 +10,7 @@ import {
   ChefHat,
   Utensils,
   XCircle,
-  RotateCw,
+  Phone,
 } from "lucide-react";
 
 const STATUS_CONFIG = {
@@ -116,6 +116,17 @@ export function OrderManager({
                 {formatTime(order.createdAt)}
                 {order.customerName && ` · ${order.customerName}`}
               </p>
+              {order.customerPhone && (
+                <div className="flex items-center gap-1 mt-1">
+                  <Phone className="h-3 w-3 text-muted-foreground" />
+                  <a
+                    href={`tel:${order.customerPhone}`}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {order.customerPhone}
+                  </a>
+                </div>
+              )}
             </div>
             <span className="text-sm font-bold tabular-nums">
               ${order.totalAmount.toFixed(2)}
@@ -150,7 +161,10 @@ export function OrderManager({
                   className="cursor-pointer flex-1 text-[11px] h-8"
                   onClick={() => handleAdvance(order._id, order.status)}
                 >
-                  {status === "cancelled" ? "Cancel" : STATUS_CONFIG[status as keyof typeof STATUS_CONFIG]?.label}
+                  {status === "cancelled"
+                    ? "Cancel"
+                    : STATUS_CONFIG[status as keyof typeof STATUS_CONFIG]
+                        ?.label}
                 </Button>
               ))}
             </div>
@@ -165,7 +179,8 @@ export function OrderManager({
       <div>
         <h2 className="text-lg font-semibold">Orders</h2>
         <p className="text-sm text-muted-foreground">
-          {activeOrders.length} active order{activeOrders.length !== 1 ? "s" : ""}
+          {activeOrders.length} active order
+          {activeOrders.length !== 1 ? "s" : ""}
         </p>
       </div>
 
@@ -174,7 +189,8 @@ export function OrderManager({
           <CardContent className="py-12 text-center">
             <Clock className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
             <p className="text-sm text-muted-foreground">
-              No orders yet. Orders will appear here when customers place them.
+              No orders yet. Orders will appear here when customers place
+              them.
             </p>
           </CardContent>
         </Card>
