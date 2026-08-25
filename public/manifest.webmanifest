@@ -1,7 +1,7 @@
 {
-  "name": "freebuff.com application",
-  "short_name": "freebuff.com",
-  "description": "freebuff.com application",
+  "name": "QR Table Order",
+  "short_name": "QR Table Order",
+  "description": "QR-powered table ordering for restaurants",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

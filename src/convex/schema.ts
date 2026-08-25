@@ -1,47 +1,96 @@
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
-import { Infer, v } from "convex/values";
+import { v } from "convex/values";
 
-// default user roles. can add / remove based on the project as needed
-export const ROLES = {
-  ADMIN: "admin",
-  USER: "user",
-  MEMBER: "member",
-} as const;
+const schema = defineSchema({
+  ...authTables,
 
-export const roleValidator = v.union(
-  v.literal(ROLES.ADMIN),
-  v.literal(ROLES.USER),
-  v.literal(ROLES.MEMBER),
-);
-export type Role = Infer<typeof roleValidator>;
+  users: defineTable({
+    name: v.optional(v.string()),
+    image: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+    role: v.optional(v.union(v.literal("admin"), v.literal("owner"), v.literal("staff"), v.literal("customer"))),
+  }).index("email", ["email"]),
 
-const schema = defineSchema(
-  {
-    // default auth tables using convex auth.
-    ...authTables, // do not remove or modify
+  restaurants: defineTable({
+    name: v.string(),
+    slug: v.string(),
+    description: v.optional(v.string()),
+    logoUrl: v.optional(v.string()),
+    coverUrl: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    ownerId: v.id("users"),
+    isOpen: v.boolean(),
+    subscriptionStatus: v.optional(v.union(v.literal("active"), v.literal("trial"), v.literal("expired"))),
+    subscriptionEndsAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_slug", ["slug"]),
 
-    // the users table is the default users table that is brought in by the authTables
-    users: defineTable({
-      name: v.optional(v.string()), // name of the user. do not remove
-      image: v.optional(v.string()), // image of the user. do not remove
-      email: v.optional(v.string()), // email of the user. do not remove
-      emailVerificationTime: v.optional(v.number()), // email verification time. do not remove
-      isAnonymous: v.optional(v.boolean()), // is the user anonymous. do not remove
+  categories: defineTable({
+    restaurantId: v.id("restaurants"),
+    name: v.string(),
+    sortOrder: v.number(),
+    isVisible: v.boolean(),
+  }).index("by_restaurant", ["restaurantId"]),
 
-      role: v.optional(roleValidator), // role of the user. do not remove
-    }).index("email", ["email"]), // index for the email. do not remove or modify
+  menuItems: defineTable({
+    restaurantId: v.id("restaurants"),
+    categoryId: v.id("categories"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    price: v.number(),
+    imageUrl: v.optional(v.string()),
+    isAvailable: v.boolean(),
+    isVeg: v.boolean(),
+    sortOrder: v.number(),
+  }).index("by_restaurant", ["restaurantId"])
+    .index("by_category", ["categoryId"]),
 
-    // add other tables here
+  tables: defineTable({
+    restaurantId: v.id("restaurants"),
+    label: v.string(),
+    qrToken: v.string(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_restaurant", ["restaurantId"])
+    .index("by_qrToken", ["qrToken"]),
 
-    // tableName: defineTable({
-    //   ...
-    //   // table fields
-    // }).index("by_field", ["field"])
-  },
-  {
-    schemaValidation: false,
-  },
-);
+  orders: defineTable({
+    restaurantId: v.id("restaurants"),
+    tableId: v.id("tables"),
+    tableLabel: v.string(),
+    customerName: v.optional(v.string()),
+    items: v.array(v.object({
+      menuItemId: v.id("menuItems"),
+      name: v.string(),
+      price: v.number(),
+      quantity: v.number(),
+      note: v.optional(v.string()),
+    })),
+    totalAmount: v.number(),
+    status: v.union(
+      v.literal("received"),
+      v.literal("accepted"),
+      v.literal("preparing"),
+      v.literal("ready"),
+      v.literal("served"),
+      v.literal("cancelled"),
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_restaurant", ["restaurantId", "createdAt"])
+    .index("by_table", ["tableId"]),
+
+  adminSettings: defineTable({
+    key: v.string(),
+    value: v.any(),
+  }).index("by_key", ["key"]),
+});
 
 export default schema;
