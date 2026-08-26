@@ -117,51 +117,50 @@ export default function CustomerMenu() {
   const [viewMode, setViewMode] = useState<ViewMode>("menu");
   const [viewingOrderId, setViewingOrderId] = useState<string | null>(null);
 
-  // Look up token by its Convex document ID
-  const tokenData = useQuery(
-    api.tokens.getById,
-    token ? { id: token as Id<"tokens"> } : "skip",
+  // Look up table by its QR token string
+  const tableData = useQuery(
+    api.tables.getByQrToken,
+    token ? { qrToken: token } : "skip",
   );
 
   const restaurant = useQuery(
     api.restaurants.getById,
-    tokenData?.restaurantId ? { id: tokenData.restaurantId } : "skip",
+    tableData?.restaurantId ? { id: tableData.restaurantId } : "skip",
   );
   const categories = useQuery(
     api.categories.getByRestaurant,
-    tokenData?.restaurantId
-      ? { restaurantId: tokenData.restaurantId }
+    tableData?.restaurantId
+      ? { restaurantId: tableData.restaurantId }
       : "skip",
   );
   const menuItems = useQuery(
     api.menuItems.getByRestaurant,
-    tokenData?.restaurantId
-      ? { restaurantId: tokenData.restaurantId }
+    tableData?.restaurantId
+      ? { restaurantId: tableData.restaurantId }
       : "skip",
   );
   const searchResults = useQuery(
     api.menuItems.search,
-    tokenData?.restaurantId && searchQuery.trim()
-      ? { restaurantId: tokenData.restaurantId, query: searchQuery }
+    tableData?.restaurantId && searchQuery.trim()
+      ? { restaurantId: tableData.restaurantId, query: searchQuery }
       : "skip",
   );
   const createOrder = useMutation(api.orders.create);
-  const incrementOrderCount = useMutation(api.tokens.incrementOrderCount);
 
   // Stored order IDs for this restaurant
   const [storedOrderIds, setStoredOrderIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (tokenData?.restaurantId) {
-      setStoredOrderIds(getStoredOrderIds(tokenData.restaurantId));
+    if (tableData?.restaurantId) {
+      setStoredOrderIds(getStoredOrderIds(tableData.restaurantId));
     }
-  }, [tokenData?.restaurantId]);
+  }, [tableData?.restaurantId]);
 
   useEffect(() => {
-    if (tokenData?.restaurantId && orderSuccess) {
-      setStoredOrderIds(getStoredOrderIds(tokenData.restaurantId));
+    if (tableData?.restaurantId && orderSuccess) {
+      setStoredOrderIds(getStoredOrderIds(tableData.restaurantId));
     }
-  }, [tokenData?.restaurantId, orderSuccess]);
+  }, [tableData?.restaurantId, orderSuccess]);
 
   const previousOrders = useQuery(
     api.orders.getByIds,
@@ -179,7 +178,7 @@ export default function CustomerMenu() {
     setSearchQuery("");
     setActiveCategory(null);
     setCart([]);
-  }, [tokenData?._id]);
+  }, [tableData?._id]);
 
   const visibleCategories = useMemo(() => {
     if (!categories) return [];
@@ -254,7 +253,7 @@ export default function CustomerMenu() {
   );
 
   const handleOrder = async () => {
-    if (!tokenData || !restaurant || cart.length === 0) return;
+    if (!tableData || !restaurant || cart.length === 0) return;
     const phone = customerPhone.replace(/\s/g, "");
     if (!phone || phone.length < 6) {
       setPhoneError("Please enter a valid mobile number.");
@@ -264,9 +263,9 @@ export default function CustomerMenu() {
     setIsOrdering(true);
     try {
       const orderId = await createOrder({
-        restaurantId: tokenData.restaurantId,
-        tokenId: tokenData._id,
-        tokenNumber: tokenData.tokenNumber,
+        restaurantId: tableData.restaurantId,
+        tableId: tableData._id,
+        tableLabel: tableData.label,
         customerName: customerName.trim() || undefined,
         customerPhone: phone,
         items: cart.map((c) => ({
@@ -278,9 +277,8 @@ export default function CustomerMenu() {
         })),
         totalAmount: cartTotal,
       });
-      await incrementOrderCount({ id: tokenData._id });
-      addStoredOrderId(tokenData.restaurantId, orderId);
-      setStoredOrderIds(getStoredOrderIds(tokenData.restaurantId));
+      addStoredOrderId(tableData.restaurantId, orderId);
+      setStoredOrderIds(getStoredOrderIds(tableData.restaurantId));
       setOrderSuccess(orderId);
       setCart([]);
       setShowCart(false);
@@ -323,7 +321,7 @@ export default function CustomerMenu() {
   };
 
   // Loading state
-  if (!token || tokenData === undefined) {
+  if (!token || tableData === undefined) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
@@ -331,8 +329,8 @@ export default function CustomerMenu() {
     );
   }
 
-  // Invalid token
-  if (!tokenData) {
+  // Invalid QR code
+  if (!tableData) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="text-center max-w-sm">
@@ -342,25 +340,25 @@ export default function CustomerMenu() {
           <h1 className="text-xl font-semibold mb-2">Invalid QR Code</h1>
           <p className="text-sm text-muted-foreground">
             This QR code is not valid or has been deactivated. Please ask the
-            counter staff for assistance.
+            staff for assistance.
           </p>
         </div>
       </div>
     );
   }
 
-  // Token completed or cancelled
-  if (tokenData.status === "completed" || tokenData.status === "cancelled") {
+  // Table disabled
+  if (!tableData.isActive) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="text-center max-w-sm">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
             <CheckCircle2 className="h-8 w-8 text-muted-foreground/50" />
           </div>
-          <h1 className="text-xl font-semibold mb-2">Token Closed</h1>
+          <h1 className="text-xl font-semibold mb-2">Table Unavailable</h1>
           <p className="text-sm text-muted-foreground">
-            This token has been closed. Please ask the counter staff for a new
-            token to place another order.
+            This table is currently unavailable. Please ask the staff for
+            assistance.
           </p>
         </div>
       </div>
@@ -380,7 +378,7 @@ export default function CustomerMenu() {
             Your order has been sent to the kitchen.
           </p>
           <p className="text-sm text-muted-foreground mb-6">
-            Token #{tokenData.tokenNumber}
+            {tableData.label}
           </p>
           <div className="flex flex-col gap-2">
             <Button
@@ -435,7 +433,7 @@ export default function CustomerMenu() {
                 <div className="flex items-center gap-2">
                   <Hash className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-sm font-semibold">
-                    Token #{viewingOrder.tokenNumber ?? "—"}
+                    {viewingOrder.tableLabel ?? `Table`}
                   </span>
                 </div>
                 <span className="text-sm font-bold tabular-nums">
@@ -579,7 +577,7 @@ export default function CustomerMenu() {
               {restaurant?.name ?? "Restaurant"}
             </h1>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Token #{tokenData.tokenNumber}
+              {tableData.label}
             </p>
           </div>
           {viewMode === "menu" && (
@@ -740,7 +738,7 @@ export default function CustomerMenu() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold">
-                        Token #{order.tokenNumber ?? "—"}
+                        {order.tableLabel ?? `Table`}
                       </span>
                       <span
                         className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusColor(order.status)}`}

@@ -108,7 +108,7 @@ export function OrderManager({
                 <div className="flex items-center gap-1">
                   <Hash className="h-3 w-3 text-muted-foreground" />
                   <span className="font-semibold text-sm">
-                    Token #{order.tokenNumber ?? "—"}
+                    {order.tableLabel ?? `Order #${order._id.slice(-6)}`}
                   </span>
                 </div>
                 <Badge

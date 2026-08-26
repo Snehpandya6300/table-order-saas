@@ -36,7 +36,6 @@ const schema = defineSchema({
       v.union(v.literal("active"), v.literal("trial"), v.literal("expired")),
     ),
     subscriptionEndsAt: v.optional(v.number()),
-    nextTokenNumber: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_owner", ["ownerId"])
@@ -63,30 +62,20 @@ const schema = defineSchema({
     .index("by_restaurant", ["restaurantId"])
     .index("by_category", ["categoryId"]),
 
-  // Token-based ordering (replaces tables)
-  tokens: defineTable({
+  // Table-based ordering
+  tables: defineTable({
     restaurantId: v.id("restaurants"),
-    tokenNumber: v.number(),
-    status: v.union(
-      v.literal("active"),
-      v.literal("completed"),
-      v.literal("cancelled"),
-    ),
-    customerPhone: v.optional(v.string()),
-    customerName: v.optional(v.string()),
-    orderCount: v.number(),
+    label: v.string(),
+    qrToken: v.string(),
+    isActive: v.boolean(),
     createdAt: v.number(),
   })
-    .index("by_restaurant", ["restaurantId", "createdAt"])
-    .index("by_number", ["restaurantId", "tokenNumber"]),
+    .index("by_restaurant", ["restaurantId"])
+    .index("by_qrToken", ["qrToken"]),
 
   orders: defineTable({
     restaurantId: v.id("restaurants"),
-    // New token fields (optional for backward compat with old table-based orders)
-    tokenId: v.optional(v.id("tokens")),
-    tokenNumber: v.optional(v.number()),
-    // Legacy fields (kept for backward compat)
-    tableId: v.optional(v.any()),
+    tableId: v.optional(v.id("tables")),
     tableLabel: v.optional(v.string()),
     customerName: v.optional(v.string()),
     customerPhone: v.string(),
@@ -128,7 +117,6 @@ const schema = defineSchema({
     createdAt: v.number(),
   })
     .index("by_restaurant", ["restaurantId", "createdAt"])
-    .index("by_token", ["tokenId"])
     .index("by_phone", ["customerPhone"]),
 
   // Customer management

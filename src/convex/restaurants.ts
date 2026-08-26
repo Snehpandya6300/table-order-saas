@@ -46,10 +46,8 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const restaurantId = await ctx.db.insert("restaurants", {
-      ...args,
-      isOpen: true,
+      ...args,      isOpen: true,
       subscriptionStatus: "trial",
-      nextTokenNumber: 1,
       createdAt: Date.now(),
     });
     return restaurantId;

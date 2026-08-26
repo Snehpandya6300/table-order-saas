@@ -35,12 +35,12 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
-type Tab = "orders" | "menu" | "tokens" | "staff" | "settings";
+type Tab = "orders" | "menu" | "tables" | "staff" | "settings";
 
 const TABS: { id: Tab; label: string; icon: typeof Utensils }[] = [
   { id: "orders", label: "Orders", icon: ClipboardList },
   { id: "menu", label: "Menu", icon: Menu },
-  { id: "tokens", label: "Tokens", icon: LayoutGrid },
+  { id: "tables", label: "Tables", icon: LayoutGrid },
   { id: "staff", label: "Staff", icon: Users },
   { id: "settings", label: "Settings", icon: Settings },
 ];
@@ -203,7 +203,7 @@ export default function Dashboard() {
         {activeTab === "menu" && restaurant && (
           <MenuManager restaurantId={restaurant._id} />
         )}
-        {activeTab === "tokens" && restaurant && (
+        {activeTab === "tables" && restaurant && (
           <TableManager
             restaurantId={restaurant._id}
             restaurantSlug={restaurant.slug}

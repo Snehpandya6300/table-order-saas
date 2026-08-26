@@ -47,17 +47,6 @@ export const getByIds = query({
   },
 });
 
-export const getByToken = query({
-  args: { tokenId: v.id("tokens") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("orders")
-      .withIndex("by_token", (q) => q.eq("tokenId", args.tokenId))
-      .order("desc")
-      .collect();
-  },
-});
-
 export const getByPhone = query({
   args: { phone: v.string() },
   handler: async (ctx, args) => {
@@ -72,8 +61,8 @@ export const getByPhone = query({
 export const create = mutation({
   args: {
     restaurantId: v.id("restaurants"),
-    tokenId: v.id("tokens"),
-    tokenNumber: v.number(),
+    tableId: v.optional(v.id("tables")),
+    tableLabel: v.optional(v.string()),
     customerName: v.optional(v.string()),
     customerPhone: v.string(),
     items: v.array(
@@ -90,8 +79,8 @@ export const create = mutation({
   handler: async (ctx, args) => {
     return await ctx.db.insert("orders", {
       restaurantId: args.restaurantId,
-      tokenId: args.tokenId,
-      tokenNumber: args.tokenNumber,
+      tableId: args.tableId,
+      tableLabel: args.tableLabel,
       customerName: args.customerName,
       customerPhone: args.customerPhone,
       items: args.items,
@@ -181,7 +170,6 @@ export const getKotOrders = query({
       )
       .order("desc")
       .collect();
-    // Return only active kitchen orders
     return orders.filter(
       (o) =>
         o.status === "received" ||
