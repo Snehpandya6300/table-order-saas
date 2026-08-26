@@ -49,6 +49,7 @@ export const create = mutation({
       ...args,
       isOpen: true,
       subscriptionStatus: "trial",
+      nextTokenNumber: 1,
       createdAt: Date.now(),
     });
     return restaurantId;

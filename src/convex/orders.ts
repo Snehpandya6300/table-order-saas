@@ -41,16 +41,29 @@ export const getByIds = query({
   args: { ids: v.array(v.id("orders")) },
   handler: async (ctx, args) => {
     const orders = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
-    return orders.filter((o) => o !== null).sort((a, b) => b!.createdAt - a!.createdAt);
+    return orders
+      .filter((o) => o !== null)
+      .sort((a, b) => b!.createdAt - a!.createdAt);
   },
 });
 
-export const getByTable = query({
-  args: { tableId: v.id("tables") },
+export const getByToken = query({
+  args: { tokenId: v.id("tokens") },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("orders")
-      .withIndex("by_table", (q) => q.eq("tableId", args.tableId))
+      .withIndex("by_token", (q) => q.eq("tokenId", args.tokenId))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const getByPhone = query({
+  args: { phone: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("orders")
+      .withIndex("by_phone", (q) => q.eq("customerPhone", args.phone))
       .order("desc")
       .collect();
   },
@@ -59,8 +72,8 @@ export const getByTable = query({
 export const create = mutation({
   args: {
     restaurantId: v.id("restaurants"),
-    tableId: v.id("tables"),
-    tableLabel: v.string(),
+    tokenId: v.id("tokens"),
+    tokenNumber: v.number(),
     customerName: v.optional(v.string()),
     customerPhone: v.string(),
     items: v.array(
@@ -76,8 +89,15 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("orders", {
-      ...args,
+      restaurantId: args.restaurantId,
+      tokenId: args.tokenId,
+      tokenNumber: args.tokenNumber,
+      customerName: args.customerName,
+      customerPhone: args.customerPhone,
+      items: args.items,
+      totalAmount: args.totalAmount,
       status: "received",
+      paymentStatus: "unpaid",
       createdAt: Date.now(),
     });
   },
@@ -100,12 +120,41 @@ export const updateStatus = mutation({
   },
 });
 
+export const updatePayment = mutation({
+  args: {
+    id: v.id("orders"),
+    paymentStatus: v.union(
+      v.literal("unpaid"),
+      v.literal("paid"),
+      v.literal("refunded"),
+    ),
+    paymentMethod: v.optional(
+      v.union(
+        v.literal("cash"),
+        v.literal("upi"),
+        v.literal("card"),
+        v.literal("online"),
+      ),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const updates: Record<string, unknown> = {
+      paymentStatus: args.paymentStatus,
+    };
+    if (args.paymentMethod) updates.paymentMethod = args.paymentMethod;
+    if (args.paymentStatus === "paid") updates.paidAt = Date.now();
+    await ctx.db.patch(args.id, updates);
+  },
+});
+
 export const getStats = query({
   args: { restaurantId: v.id("restaurants") },
   handler: async (ctx, args) => {
     const orders = await ctx.db
       .query("orders")
-      .withIndex("by_restaurant", (q) => q.eq("restaurantId", args.restaurantId))
+      .withIndex("by_restaurant", (q) =>
+        q.eq("restaurantId", args.restaurantId),
+      )
       .collect();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -116,6 +165,28 @@ export const getStats = query({
       todayOrders: todayOrders.length,
       todayRevenue: todayOrders.reduce((sum, o) => sum + o.totalAmount, 0),
       pendingOrders: orders.filter((o) => o.status === "received").length,
+      unpaidOrders: orders.filter((o) => o.paymentStatus === "unpaid").length,
+      totalRevenue: orders.reduce((sum, o) => sum + o.totalAmount, 0),
     };
+  },
+});
+
+export const getKotOrders = query({
+  args: { restaurantId: v.id("restaurants") },
+  handler: async (ctx, args) => {
+    const orders = await ctx.db
+      .query("orders")
+      .withIndex("by_restaurant", (q) =>
+        q.eq("restaurantId", args.restaurantId),
+      )
+      .order("desc")
+      .collect();
+    // Return only active kitchen orders
+    return orders.filter(
+      (o) =>
+        o.status === "received" ||
+        o.status === "accepted" ||
+        o.status === "preparing",
+    );
   },
 });
