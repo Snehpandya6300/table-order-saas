@@ -36,6 +36,7 @@ const schema = defineSchema({
       v.union(v.literal("active"), v.literal("trial"), v.literal("expired")),
     ),
     subscriptionEndsAt: v.optional(v.number()),
+    nextTokenNumber: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_owner", ["ownerId"])
