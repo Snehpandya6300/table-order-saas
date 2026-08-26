@@ -6,6 +6,7 @@ import { Id } from "../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Sheet,
   SheetContent,
@@ -25,6 +26,11 @@ import {
   CheckCircle2,
   ArrowLeft,
   Phone,
+  Clock,
+  ChefHat,
+  Utensils,
+  History,
+  ChevronLeft,
 } from "lucide-react";
 
 interface CartItem {
@@ -49,6 +55,49 @@ type MenuItem = {
   sortOrder: number;
 };
 
+// localStorage helpers
+function getStoredOrderIds(restaurantId: Id<"restaurants">): string[] {
+  try {
+    const raw = localStorage.getItem(`qr-orders-${restaurantId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addStoredOrderId(restaurantId: Id<"restaurants">, orderId: string) {
+  try {
+    const existing = getStoredOrderIds(restaurantId);
+    if (!existing.includes(orderId)) {
+      localStorage.setItem(
+        `qr-orders-${restaurantId}`,
+        JSON.stringify([orderId, ...existing].slice(0, 50)),
+      );
+    }
+  } catch {
+    // ignore
+  }
+}
+
+const STATUS_STEPS = [
+  { key: "received", label: "Received", icon: Clock },
+  { key: "accepted", label: "Accepted", icon: CheckCircle2 },
+  { key: "preparing", label: "Preparing", icon: ChefHat },
+  { key: "ready", label: "Ready", icon: Utensils },
+  { key: "served", label: "Served", icon: CheckCircle2 },
+] as const;
+
+const STATUS_ORDER = [
+  "received",
+  "accepted",
+  "preparing",
+  "ready",
+  "served",
+  "cancelled",
+];
+
+type ViewMode = "menu" | "orders" | "orderDetail";
+
 export default function CustomerMenu() {
   const { token } = useParams<{ token: string }>();
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,6 +112,8 @@ export default function CustomerMenu() {
   const [phoneError, setPhoneError] = useState("");
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("menu");
+  const [viewingOrderId, setViewingOrderId] = useState<string | null>(null);
 
   const table = useQuery(api.tables.getByQrToken, token ? { token } : "skip");
   const restaurant = useQuery(
@@ -84,6 +135,36 @@ export default function CustomerMenu() {
       : "skip",
   );
   const createOrder = useMutation(api.orders.create);
+
+  // Stored order IDs for this restaurant
+  const [storedOrderIds, setStoredOrderIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (table?.restaurantId) {
+      setStoredOrderIds(getStoredOrderIds(table.restaurantId));
+    }
+  }, [table?.restaurantId]);
+
+  // Refresh stored IDs when returning from order success
+  useEffect(() => {
+    if (table?.restaurantId && orderSuccess) {
+      setStoredOrderIds(getStoredOrderIds(table.restaurantId));
+    }
+  }, [table?.restaurantId, orderSuccess]);
+
+  // Fetch previous orders from stored IDs
+  const previousOrders = useQuery(
+    api.orders.getByIds,
+    storedOrderIds.length > 0
+      ? { ids: storedOrderIds as Id<"orders">[] }
+      : "skip",
+  );
+
+  // Fetch single order for detail view
+  const viewingOrder = useQuery(
+    api.orders.getById,
+    viewingOrderId ? { id: viewingOrderId as Id<"orders"> } : "skip",
+  );
 
   useEffect(() => {
     setSearchQuery("");
@@ -188,6 +269,9 @@ export default function CustomerMenu() {
         })),
         totalAmount: cartTotal,
       });
+      // Save order ID to localStorage
+      addStoredOrderId(table.restaurantId, orderId);
+      setStoredOrderIds(getStoredOrderIds(table.restaurantId));
       setOrderSuccess(orderId);
       setCart([]);
       setShowCart(false);
@@ -202,6 +286,31 @@ export default function CustomerMenu() {
     setSelectedItem(item);
     setItemQuantity(1);
     setItemNote("");
+  };
+
+  const formatTime = (ts: number) =>
+    new Date(ts).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case "received":
+        return "bg-blue-100 text-blue-700";
+      case "accepted":
+        return "bg-indigo-100 text-indigo-700";
+      case "preparing":
+        return "bg-amber-100 text-amber-700";
+      case "ready":
+        return "bg-emerald-100 text-emerald-700";
+      case "served":
+        return "bg-gray-100 text-gray-600";
+      case "cancelled":
+        return "bg-red-100 text-red-700";
+      default:
+        return "bg-gray-100 text-gray-600";
+    }
   };
 
   if (!token || table === undefined) {
@@ -243,21 +352,176 @@ export default function CustomerMenu() {
           <p className="text-sm text-muted-foreground mb-6">
             Table {table.label}
           </p>
-          <Button
-            variant="outline"
-            className="cursor-pointer"
-            onClick={() => setOrderSuccess(null)}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Menu
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              className="cursor-pointer"
+              onClick={() => {
+                setOrderSuccess(null);
+                setViewMode("orders");
+              }}
+            >
+              View My Orders
+            </Button>
+            <Button
+              variant="outline"
+              className="cursor-pointer"
+              onClick={() => setOrderSuccess(null)}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Menu
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Order Detail View
+  if (viewMode === "orderDetail" && viewingOrder) {
+    const currentStepIndex = STATUS_ORDER.indexOf(viewingOrder.status);
+    const isCancelled = viewingOrder.status === "cancelled";
+
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-40 border-b border-border/50 bg-background/90 backdrop-blur-lg">
+          <div className="mx-auto flex h-14 max-w-2xl items-center px-4 gap-3">
+            <button
+              className="cursor-pointer"
+              onClick={() => {
+                setViewingOrderId(null);
+                setViewMode("orders");
+              }}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <h1 className="text-sm font-semibold">Order Details</h1>
+          </div>
+        </header>
+
+        <div className="mx-auto max-w-2xl px-4 py-6 space-y-6">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-semibold">
+                  {viewingOrder.tableLabel}
+                </span>
+                <span className="text-sm font-bold tabular-nums">
+                  ${viewingOrder.totalAmount.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusColor(viewingOrder.status)}`}>
+                  {viewingOrder.status.charAt(0).toUpperCase() + viewingOrder.status.slice(1)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatTime(viewingOrder.createdAt)}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {isCancelled ? (
+            <Card className="border-red-200 bg-red-50/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <X className="h-5 w-5 text-red-600 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-red-700">
+                    Order Cancelled
+                  </p>
+                  <p className="text-xs text-red-600/70">
+                    This order has been cancelled.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {STATUS_STEPS.map((step) => {
+                const stepIndex = STATUS_ORDER.indexOf(step.key);
+                const isCompleted = stepIndex <= currentStepIndex;
+                const isCurrent = step.key === viewingOrder.status;
+                const StepIcon = step.icon;
+
+                return (
+                  <div
+                    key={step.key}
+                    className={`flex items-center gap-3 rounded-xl border p-3 transition-all ${
+                      isCurrent
+                        ? "border-foreground bg-card shadow-sm"
+                        : isCompleted
+                          ? "border-border/50 bg-muted/30"
+                          : "border-border/30 bg-transparent opacity-50"
+                    }`}
+                  >
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                        isCompleted
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <StepIcon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p
+                        className={`text-sm font-medium ${
+                          isCurrent || isCompleted
+                            ? "text-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {step.label}
+                      </p>
+                    </div>
+                    {isCurrent && (
+                      <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                        Current
+                      </span>
+                    )}
+                    {isCompleted && !isCurrent && (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <Card>
+            <CardContent className="p-4">
+              <h3 className="text-sm font-semibold mb-3">Items Ordered</h3>
+              <div className="space-y-2">
+                {viewingOrder.items.map((item, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {item.quantity}× {item.name}
+                      {item.note && (
+                        <span className="italic text-muted-foreground/70 ml-1">
+                          — {item.note}
+                        </span>
+                      )}
+                    </span>
+                    <span className="tabular-nums font-medium">
+                      ${(item.price * item.quantity).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t flex justify-between text-sm font-semibold">
+                <span>Total</span>
+                <span className="tabular-nums">
+                  ${viewingOrder.totalAmount.toFixed(2)}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-16">
       <header className="sticky top-0 z-40 border-b border-border/50 bg-background/90 backdrop-blur-lg">
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
           <div>
@@ -268,136 +532,194 @@ export default function CustomerMenu() {
               {table.label}
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="cursor-pointer relative"
-            onClick={() => setShowCart(true)}
-          >
-            <ShoppingCart className="h-4 w-4" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-background text-[10px] font-bold">
-                {cartCount}
-              </span>
-            )}
-          </Button>
+          {viewMode === "menu" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="cursor-pointer relative"
+              onClick={() => setShowCart(true)}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-background text-[10px] font-bold">
+                  {cartCount}
+                </span>
+              )}
+            </Button>
+          )}
         </div>
       </header>
 
-      <div className="mx-auto max-w-2xl px-4 py-4">
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search the menu..."
-            className="pl-9"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-              onClick={() => setSearchQuery("")}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {!searchQuery.trim() && visibleCategories.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none">
-            <button
-              className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                activeCategory === null
-                  ? "bg-foreground text-background border-foreground"
-                  : "bg-transparent text-muted-foreground border-border hover:border-foreground/30"
-              }`}
-              onClick={() => setActiveCategory(null)}
-            >
-              All
-            </button>
-            {visibleCategories.map((cat) => (
+      {/* Menu View */}
+      {viewMode === "menu" && (
+        <div className="mx-auto max-w-2xl px-4 py-4">
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search the menu..."
+              className="pl-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
               <button
-                key={cat._id}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={() => setSearchQuery("")}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {!searchQuery.trim() && visibleCategories.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none">
+              <button
                 className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                  activeCategory === cat._id
+                  activeCategory === null
                     ? "bg-foreground text-background border-foreground"
                     : "bg-transparent text-muted-foreground border-border hover:border-foreground/30"
                 }`}
-                onClick={() => setActiveCategory(cat._id)}
+                onClick={() => setActiveCategory(null)}
               >
-                {cat.name}
+                All
               </button>
-            ))}
-          </div>
-        )}
+              {visibleCategories.map((cat) => (
+                <button
+                  key={cat._id}
+                  className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                    activeCategory === cat._id
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-transparent text-muted-foreground border-border hover:border-foreground/30"
+                  }`}
+                  onClick={() => setActiveCategory(cat._id)}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
 
-        <div className="space-y-3">
-          {displayedItems.length === 0 ? (
+          <div className="space-y-3">
+            {displayedItems.length === 0 ? (
+              <div className="py-16 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {searchQuery
+                    ? "No items match your search."
+                    : "No items available right now."}
+                </p>
+              </div>
+            ) : (
+              displayedItems.map((item) => (
+                <button
+                  key={item._id}
+                  className="w-full text-left rounded-xl border border-border/50 bg-card p-3 hover:border-border hover:shadow-sm transition-all cursor-pointer"
+                  onClick={() => openItemDetail(item)}
+                >
+                  <div className="flex gap-3">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="h-20 w-20 rounded-lg object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-muted text-lg">
+                        🍽️
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0 py-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold truncate">
+                          {item.name}
+                        </span>
+                        {item.isVeg && (
+                          <Leaf className="h-3 w-3 text-emerald-600 shrink-0" />
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                          {item.description}
+                        </p>
+                      )}
+                      <p className="text-sm font-bold mt-1.5 tabular-nums">
+                        ${item.price.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="flex items-end shrink-0">
+                      <Button
+                        size="sm"
+                        className="cursor-pointer h-8 w-8 p-0 rounded-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToCart(item, 1, "");
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Previous Orders View */}
+      {viewMode === "orders" && (
+        <div className="mx-auto max-w-2xl px-4 py-4">
+          <h2 className="text-base font-semibold mb-4">Previous Orders</h2>
+          {!previousOrders || previousOrders.length === 0 ? (
             <div className="py-16 text-center">
+              <History className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">
-                {searchQuery
-                  ? "No items match your search."
-                  : "No items available right now."}
+                No orders yet. Place an order and it will appear here.
               </p>
             </div>
           ) : (
-            displayedItems.map((item) => (
-              <button
-                key={item._id}
-                className="w-full text-left rounded-xl border border-border/50 bg-card p-3 hover:border-border hover:shadow-sm transition-all cursor-pointer"
-                onClick={() => openItemDetail(item)}
-              >
-                <div className="flex gap-3">
-                  {item.imageUrl ? (
-                    <img
-                      src={item.imageUrl}
-                      alt={item.name}
-                      className="h-20 w-20 rounded-lg object-cover shrink-0"
-                    />
-                  ) : (
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-muted text-lg">
-                      🍽️
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0 py-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-semibold truncate">
-                        {item.name}
+            <div className="space-y-3">
+              {previousOrders.map((order) => (
+                <button
+                  key={order._id}
+                  className="w-full text-left rounded-xl border border-border/50 bg-card p-4 hover:border-border hover:shadow-sm transition-all cursor-pointer"
+                  onClick={() => {
+                    setViewingOrderId(order._id);
+                    setViewMode("orderDetail");
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">
+                        {order.tableLabel}
                       </span>
-                      {item.isVeg && (
-                        <Leaf className="h-3 w-3 text-emerald-600 shrink-0" />
-                      )}
+                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusColor(order.status)}`}>
+                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                      </span>
                     </div>
-                    {item.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                        {item.description}
-                      </p>
-                    )}
-                    <p className="text-sm font-bold mt-1.5 tabular-nums">
-                      ${item.price.toFixed(2)}
+                    <span className="text-sm font-bold tabular-nums">
+                      ${order.totalAmount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {order.items
+                        .map((it) => `${it.quantity}× ${it.name}`)
+                        .join(", ")}
                     </p>
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                      {formatTime(order.createdAt)}
+                    </span>
                   </div>
-                  <div className="flex items-end shrink-0">
-                    <Button
-                      size="sm"
-                      className="cursor-pointer h-8 w-8 p-0 rounded-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addToCart(item, 1, "");
-                      }}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </button>
-            ))
+                </button>
+              ))}
+            </div>
           )}
         </div>
-      </div>
+      )}
 
-      {cartCount > 0 && (
-        <div className="fixed bottom-6 left-4 right-4 z-50 mx-auto max-w-2xl">
+      {/* Floating Cart Button */}
+      {viewMode === "menu" && cartCount > 0 && (
+        <div className="fixed bottom-16 left-4 right-4 z-50 mx-auto max-w-2xl">
           <Button
             className="cursor-pointer w-full h-14 text-sm font-semibold rounded-xl shadow-lg"
             onClick={() => setShowCart(true)}
@@ -410,6 +732,40 @@ export default function CustomerMenu() {
           </Button>
         </div>
       )}
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/95 backdrop-blur-lg">
+        <div className="mx-auto flex h-14 max-w-2xl items-center">
+          <button
+            className={`flex flex-1 flex-col items-center gap-0.5 cursor-pointer ${
+              viewMode === "menu" ? "text-foreground" : "text-muted-foreground"
+            }`}
+            onClick={() => setViewMode("menu")}
+          >
+            <Utensils className="h-4 w-4" />
+            <span className="text-[10px] font-medium">Menu</span>
+          </button>
+          <button
+            className={`flex flex-1 flex-col items-center gap-0.5 cursor-pointer relative ${
+              viewMode === "orders" || viewMode === "orderDetail"
+                ? "text-foreground"
+                : "text-muted-foreground"
+            }`}
+            onClick={() => {
+              setViewMode("orders");
+              setViewingOrderId(null);
+            }}
+          >
+            <History className="h-4 w-4" />
+            <span className="text-[10px] font-medium">My Orders</span>
+            {storedOrderIds.length > 0 && (
+              <span className="absolute top-0.5 right-[calc(50%-16px)] flex h-3.5 w-3.5 items-center justify-center rounded-full bg-foreground text-background text-[8px] font-bold">
+                {storedOrderIds.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </nav>
 
       {/* Cart Sheet */}
       <Sheet open={showCart} onOpenChange={setShowCart}>

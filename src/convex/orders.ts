@@ -37,6 +37,14 @@ export const getById = query({
   },
 });
 
+export const getByIds = query({
+  args: { ids: v.array(v.id("orders")) },
+  handler: async (ctx, args) => {
+    const orders = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
+    return orders.filter((o) => o !== null).sort((a, b) => b!.createdAt - a!.createdAt);
+  },
+});
+
 export const getByTable = query({
   args: { tableId: v.id("tables") },
   handler: async (ctx, args) => {
