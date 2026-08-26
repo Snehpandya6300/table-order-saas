@@ -1,6 +1,13 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+export const getById = query({
+  args: { id: v.id("tokens") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});
+
 export const getByRestaurant = query({
   args: { restaurantId: v.id("restaurants") },
   handler: async (ctx, args) => {
@@ -39,7 +46,7 @@ export const create = mutation({
     const restaurant = await ctx.db.get(args.restaurantId);
     if (!restaurant) throw new Error("Restaurant not found");
 
-    const tokenNumber = restaurant.nextTokenNumber;
+    const tokenNumber = restaurant.nextTokenNumber ?? 1;
 
     // Increment restaurant token counter
     await ctx.db.patch(args.restaurantId, {
@@ -50,7 +57,7 @@ export const create = mutation({
     const tokenId = await ctx.db.insert("tokens", {
       restaurantId: args.restaurantId,
       tokenNumber,
-      status: "active",
+      status: "active" as const,
       customerPhone: args.customerPhone,
       customerName: args.customerName,
       orderCount: 0,

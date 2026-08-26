@@ -31,6 +31,8 @@ import {
   Utensils,
   History,
   ChevronLeft,
+  Hash,
+  CreditCard,
 } from "lucide-react";
 
 interface CartItem {
@@ -55,7 +57,7 @@ type MenuItem = {
   sortOrder: number;
 };
 
-// localStorage helpers
+// localStorage helpers — store order IDs per restaurant for "My Orders"
 function getStoredOrderIds(restaurantId: Id<"restaurants">): string[] {
   try {
     const raw = localStorage.getItem(`qr-orders-${restaurantId}`);
@@ -115,44 +117,52 @@ export default function CustomerMenu() {
   const [viewMode, setViewMode] = useState<ViewMode>("menu");
   const [viewingOrderId, setViewingOrderId] = useState<string | null>(null);
 
-  const table = useQuery(api.tables.getByQrToken, token ? { token } : "skip");
+  // Look up token by its Convex document ID
+  const tokenData = useQuery(
+    api.tokens.getById,
+    token ? { id: token as Id<"tokens"> } : "skip",
+  );
+
   const restaurant = useQuery(
     api.restaurants.getById,
-    table?.restaurantId ? { id: table.restaurantId } : "skip",
+    tokenData?.restaurantId ? { id: tokenData.restaurantId } : "skip",
   );
   const categories = useQuery(
     api.categories.getByRestaurant,
-    table?.restaurantId ? { restaurantId: table.restaurantId } : "skip",
+    tokenData?.restaurantId
+      ? { restaurantId: tokenData.restaurantId }
+      : "skip",
   );
   const menuItems = useQuery(
     api.menuItems.getByRestaurant,
-    table?.restaurantId ? { restaurantId: table.restaurantId } : "skip",
+    tokenData?.restaurantId
+      ? { restaurantId: tokenData.restaurantId }
+      : "skip",
   );
   const searchResults = useQuery(
     api.menuItems.search,
-    table?.restaurantId && searchQuery.trim()
-      ? { restaurantId: table.restaurantId, query: searchQuery }
+    tokenData?.restaurantId && searchQuery.trim()
+      ? { restaurantId: tokenData.restaurantId, query: searchQuery }
       : "skip",
   );
   const createOrder = useMutation(api.orders.create);
+  const incrementOrderCount = useMutation(api.tokens.incrementOrderCount);
 
   // Stored order IDs for this restaurant
   const [storedOrderIds, setStoredOrderIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (table?.restaurantId) {
-      setStoredOrderIds(getStoredOrderIds(table.restaurantId));
+    if (tokenData?.restaurantId) {
+      setStoredOrderIds(getStoredOrderIds(tokenData.restaurantId));
     }
-  }, [table?.restaurantId]);
+  }, [tokenData?.restaurantId]);
 
-  // Refresh stored IDs when returning from order success
   useEffect(() => {
-    if (table?.restaurantId && orderSuccess) {
-      setStoredOrderIds(getStoredOrderIds(table.restaurantId));
+    if (tokenData?.restaurantId && orderSuccess) {
+      setStoredOrderIds(getStoredOrderIds(tokenData.restaurantId));
     }
-  }, [table?.restaurantId, orderSuccess]);
+  }, [tokenData?.restaurantId, orderSuccess]);
 
-  // Fetch previous orders from stored IDs
   const previousOrders = useQuery(
     api.orders.getByIds,
     storedOrderIds.length > 0
@@ -160,7 +170,6 @@ export default function CustomerMenu() {
       : "skip",
   );
 
-  // Fetch single order for detail view
   const viewingOrder = useQuery(
     api.orders.getById,
     viewingOrderId ? { id: viewingOrderId as Id<"orders"> } : "skip",
@@ -170,7 +179,7 @@ export default function CustomerMenu() {
     setSearchQuery("");
     setActiveCategory(null);
     setCart([]);
-  }, [table?._id]);
+  }, [tokenData?._id]);
 
   const visibleCategories = useMemo(() => {
     if (!categories) return [];
@@ -245,7 +254,7 @@ export default function CustomerMenu() {
   );
 
   const handleOrder = async () => {
-    if (!table || !restaurant || cart.length === 0) return;
+    if (!tokenData || !restaurant || cart.length === 0) return;
     const phone = customerPhone.replace(/\s/g, "");
     if (!phone || phone.length < 6) {
       setPhoneError("Please enter a valid mobile number.");
@@ -255,9 +264,9 @@ export default function CustomerMenu() {
     setIsOrdering(true);
     try {
       const orderId = await createOrder({
-        restaurantId: table.restaurantId,
-        tableId: table._id,
-        tableLabel: table.label,
+        restaurantId: tokenData.restaurantId,
+        tokenId: tokenData._id,
+        tokenNumber: tokenData.tokenNumber,
         customerName: customerName.trim() || undefined,
         customerPhone: phone,
         items: cart.map((c) => ({
@@ -269,9 +278,9 @@ export default function CustomerMenu() {
         })),
         totalAmount: cartTotal,
       });
-      // Save order ID to localStorage
-      addStoredOrderId(table.restaurantId, orderId);
-      setStoredOrderIds(getStoredOrderIds(table.restaurantId));
+      await incrementOrderCount({ id: tokenData._id });
+      addStoredOrderId(tokenData.restaurantId, orderId);
+      setStoredOrderIds(getStoredOrderIds(tokenData.restaurantId));
       setOrderSuccess(orderId);
       setCart([]);
       setShowCart(false);
@@ -313,7 +322,8 @@ export default function CustomerMenu() {
     }
   };
 
-  if (!token || table === undefined) {
+  // Loading state
+  if (!token || tokenData === undefined) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
@@ -321,7 +331,8 @@ export default function CustomerMenu() {
     );
   }
 
-  if (!table) {
+  // Invalid token
+  if (!tokenData) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="text-center max-w-sm">
@@ -330,14 +341,33 @@ export default function CustomerMenu() {
           </div>
           <h1 className="text-xl font-semibold mb-2">Invalid QR Code</h1>
           <p className="text-sm text-muted-foreground">
-            This QR code is not valid or has been deactivated. Please ask
-            your server for a new one.
+            This QR code is not valid or has been deactivated. Please ask the
+            counter staff for assistance.
           </p>
         </div>
       </div>
     );
   }
 
+  // Token completed or cancelled
+  if (tokenData.status === "completed" || tokenData.status === "cancelled") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="text-center max-w-sm">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+            <CheckCircle2 className="h-8 w-8 text-muted-foreground/50" />
+          </div>
+          <h1 className="text-xl font-semibold mb-2">Token Closed</h1>
+          <p className="text-sm text-muted-foreground">
+            This token has been closed. Please ask the counter staff for a new
+            token to place another order.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Order success
   if (orderSuccess) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
@@ -346,11 +376,11 @@ export default function CustomerMenu() {
             <CheckCircle2 className="h-8 w-8 text-emerald-600" />
           </div>
           <h1 className="text-xl font-semibold mb-2">Order Placed</h1>
-          <p className="text-sm text-muted-foreground mb-2">
+          <p className="text-sm text-muted-foreground mb-1">
             Your order has been sent to the kitchen.
           </p>
           <p className="text-sm text-muted-foreground mb-6">
-            Table {table.label}
+            Token #{tokenData.tokenNumber}
           </p>
           <div className="flex flex-col gap-2">
             <Button
@@ -402,21 +432,41 @@ export default function CustomerMenu() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-semibold">
-                  {viewingOrder.tableLabel}
-                </span>
+                <div className="flex items-center gap-2">
+                  <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm font-semibold">
+                    Token #{viewingOrder.tokenNumber ?? "—"}
+                  </span>
+                </div>
                 <span className="text-sm font-bold tabular-nums">
                   ${viewingOrder.totalAmount.toFixed(2)}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-1">
-                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusColor(viewingOrder.status)}`}>
-                  {viewingOrder.status.charAt(0).toUpperCase() + viewingOrder.status.slice(1)}
+                <span
+                  className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusColor(viewingOrder.status)}`}
+                >
+                  {viewingOrder.status.charAt(0).toUpperCase() +
+                    viewingOrder.status.slice(1)}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {formatTime(viewingOrder.createdAt)}
                 </span>
               </div>
+              {viewingOrder.paymentStatus && (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <CreditCard className="h-3 w-3 text-muted-foreground" />
+                  <span
+                    className={`text-[11px] font-medium ${viewingOrder.paymentStatus === "paid" ? "text-emerald-600" : viewingOrder.paymentStatus === "refunded" ? "text-amber-600" : "text-muted-foreground"}`}
+                  >
+                    {viewingOrder.paymentStatus === "paid"
+                      ? `Paid (${viewingOrder.paymentMethod ?? ""})`
+                      : viewingOrder.paymentStatus === "refunded"
+                        ? "Refunded"
+                        : "Unpaid"}
+                  </span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -529,7 +579,7 @@ export default function CustomerMenu() {
               {restaurant?.name ?? "Restaurant"}
             </h1>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {table.label}
+              Token #{tokenData.tokenNumber}
             </p>
           </div>
           {viewMode === "menu" && (
@@ -690,10 +740,13 @@ export default function CustomerMenu() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold">
-                        {order.tableLabel}
+                        Token #{order.tokenNumber ?? "—"}
                       </span>
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusColor(order.status)}`}>
-                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                      <span
+                        className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusColor(order.status)}`}
+                      >
+                        {order.status.charAt(0).toUpperCase() +
+                          order.status.slice(1)}
                       </span>
                     </div>
                     <span className="text-sm font-bold tabular-nums">
@@ -710,6 +763,20 @@ export default function CustomerMenu() {
                       {formatTime(order.createdAt)}
                     </span>
                   </div>
+                  {order.paymentStatus && (
+                    <div className="flex items-center gap-1 mt-1.5">
+                      <CreditCard className="h-3 w-3 text-muted-foreground" />
+                      <span
+                        className={`text-[11px] ${order.paymentStatus === "paid" ? "text-emerald-600" : "text-muted-foreground"}`}
+                      >
+                        {order.paymentStatus === "paid"
+                          ? `Paid (${order.paymentMethod ?? ""})`
+                          : order.paymentStatus === "refunded"
+                            ? "Refunded"
+                            : "Unpaid"}
+                      </span>
+                    </div>
+                  )}
                 </button>
               ))}
             </div>

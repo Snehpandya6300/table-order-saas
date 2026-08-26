@@ -11,6 +11,9 @@ import {
   Utensils,
   XCircle,
   Phone,
+  Hash,
+  CreditCard,
+  Banknote,
 } from "lucide-react";
 
 const STATUS_CONFIG = {
@@ -60,6 +63,7 @@ export function OrderManager({
 }) {
   const orders = useQuery(api.orders.getByRestaurant, { restaurantId });
   const updateStatus = useMutation(api.orders.updateStatus);
+  const updatePayment = useMutation(api.orders.updatePayment);
 
   if (!orders) {
     return (
@@ -101,9 +105,12 @@ export function OrderManager({
           <div className="flex items-start justify-between mb-3">
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm">
-                  {order.tableLabel}
-                </span>
+                <div className="flex items-center gap-1">
+                  <Hash className="h-3 w-3 text-muted-foreground" />
+                  <span className="font-semibold text-sm">
+                    Token #{order.tokenNumber ?? "—"}
+                  </span>
+                </div>
                 <Badge
                   variant="outline"
                   className={`text-[10px] ${config.color}`}
@@ -132,6 +139,69 @@ export function OrderManager({
               ${order.totalAmount.toFixed(2)}
             </span>
           </div>
+
+          {/* Payment Status */}
+          {order.paymentStatus && (
+            <div className="flex items-center gap-1.5 mb-3 p-2 rounded-lg bg-muted/50">
+              <CreditCard className="h-3 w-3 text-muted-foreground" />
+              <span
+                className={`text-[11px] font-medium ${order.paymentStatus === "paid" ? "text-emerald-600" : order.paymentStatus === "refunded" ? "text-amber-600" : "text-muted-foreground"}`}
+              >
+                {order.paymentStatus === "paid"
+                  ? `Paid${order.paymentMethod ? ` via ${order.paymentMethod}` : ""}`
+                  : order.paymentStatus === "refunded"
+                    ? "Refunded"
+                    : "Unpaid"}
+              </span>
+              {showActions && order.paymentStatus === "unpaid" && (
+                <div className="ml-auto flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="cursor-pointer h-6 px-2 text-[10px] text-emerald-600"
+                    onClick={() =>
+                      updatePayment({
+                        id: order._id,
+                        paymentStatus: "paid",
+                        paymentMethod: "cash",
+                      })
+                    }
+                  >
+                    <Banknote className="mr-1 h-3 w-3" />
+                    Cash
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="cursor-pointer h-6 px-2 text-[10px] text-emerald-600"
+                    onClick={() =>
+                      updatePayment({
+                        id: order._id,
+                        paymentStatus: "paid",
+                        paymentMethod: "upi",
+                      })
+                    }
+                  >
+                    UPI
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="cursor-pointer h-6 px-2 text-[10px] text-emerald-600"
+                    onClick={() =>
+                      updatePayment({
+                        id: order._id,
+                        paymentStatus: "paid",
+                        paymentMethod: "card",
+                      })
+                    }
+                  >
+                    Card
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5 mb-3">
             {order.items.map((item, i) => (
@@ -189,8 +259,7 @@ export function OrderManager({
           <CardContent className="py-12 text-center">
             <Clock className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
             <p className="text-sm text-muted-foreground">
-              No orders yet. Orders will appear here when customers place
-              them.
+              No orders yet. Orders will appear here when customers place them.
             </p>
           </CardContent>
         </Card>

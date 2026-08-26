@@ -11,6 +11,9 @@ import {
   UtensilsCrossed,
   LogOut,
   QrCode,
+  TrendingUp,
+  ShoppingBag,
+  Clock,
 } from "lucide-react";
 
 export default function Admin() {
@@ -31,7 +34,13 @@ export default function Admin() {
     );
   }
 
-  const totalOrders = 0; // Would be aggregated in a real admin query
+  const activeTrials = restaurants.filter(
+    (r) => r.subscriptionStatus === "trial",
+  ).length;
+  const activeSubscriptions = restaurants.filter(
+    (r) => r.subscriptionStatus === "active",
+  ).length;
+  const openRestaurants = restaurants.filter((r) => r.isOpen).length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -69,7 +78,7 @@ export default function Admin() {
         </div>
 
         {/* Stats */}
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           <Card className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
               <UtensilsCrossed className="h-3.5 w-3.5" />
@@ -82,20 +91,21 @@ export default function Admin() {
               <Users className="h-3.5 w-3.5" />
               <span className="text-xs">Active Trials</span>
             </div>
-            <span className="text-2xl font-bold">
-              {restaurants.filter((r) => r.subscriptionStatus === "trial")
-                .length}
-            </span>
+            <span className="text-2xl font-bold">{activeTrials}</span>
           </Card>
           <Card className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <LayoutDashboard className="h-3.5 w-3.5" />
-              <span className="text-xs">Active Subscriptions</span>
+              <TrendingUp className="h-3.5 w-3.5" />
+              <span className="text-xs">Subscriptions</span>
             </div>
-            <span className="text-2xl font-bold">
-              {restaurants.filter((r) => r.subscriptionStatus === "active")
-                .length}
-            </span>
+            <span className="text-2xl font-bold">{activeSubscriptions}</span>
+          </Card>
+          <Card className="p-4">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <ShoppingBag className="h-3.5 w-3.5" />
+              <span className="text-xs">Open Now</span>
+            </div>
+            <span className="text-2xl font-bold">{openRestaurants}</span>
           </Card>
         </div>
 
@@ -119,16 +129,23 @@ export default function Admin() {
                         {r.slug} · Created{" "}
                         {new Date(r.createdAt).toLocaleDateString()}
                       </p>
+                      {r.description && (
+                        <p className="text-xs text-muted-foreground/70 truncate mt-0.5">
+                          {r.description}
+                        </p>
+                      )}
                     </div>
-                    <Badge variant="outline" className="capitalize text-xs">
-                      {r.subscriptionStatus ?? "trial"}
-                    </Badge>
-                    <Badge
-                      variant={r.isOpen ? "default" : "secondary"}
-                      className="text-xs"
-                    >
-                      {r.isOpen ? "Open" : "Closed"}
-                    </Badge>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="outline" className="capitalize text-xs">
+                        {r.subscriptionStatus ?? "trial"}
+                      </Badge>
+                      <Badge
+                        variant={r.isOpen ? "default" : "secondary"}
+                        className="text-xs"
+                      >
+                        {r.isOpen ? "Open" : "Closed"}
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -18,6 +18,7 @@ import { SetupRestaurant } from "@/components/dashboard/SetupRestaurant";
 import { MenuManager } from "@/components/dashboard/MenuManager";
 import { TableManager } from "@/components/dashboard/TableManager";
 import { OrderManager } from "@/components/dashboard/OrderManager";
+import { StaffManager } from "@/components/dashboard/StaffManager";
 import {
   LogOut,
   Utensils,
@@ -30,15 +31,17 @@ import {
   Clock,
   Pencil,
   QrCode,
+  Users,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
-type Tab = "orders" | "menu" | "tables" | "settings";
+type Tab = "orders" | "menu" | "tokens" | "staff" | "settings";
 
 const TABS: { id: Tab; label: string; icon: typeof Utensils }[] = [
   { id: "orders", label: "Orders", icon: ClipboardList },
   { id: "menu", label: "Menu", icon: Menu },
-  { id: "tables", label: "Tables", icon: LayoutGrid },
+  { id: "tokens", label: "Tokens", icon: LayoutGrid },
+  { id: "staff", label: "Staff", icon: Users },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -200,11 +203,14 @@ export default function Dashboard() {
         {activeTab === "menu" && restaurant && (
           <MenuManager restaurantId={restaurant._id} />
         )}
-        {activeTab === "tables" && restaurant && (
+        {activeTab === "tokens" && restaurant && (
           <TableManager
             restaurantId={restaurant._id}
             restaurantSlug={restaurant.slug}
           />
+        )}
+        {activeTab === "staff" && restaurant && (
+          <StaffManager restaurantId={restaurant._id} />
         )}
         {activeTab === "settings" && restaurant && (
           <div className="space-y-4">
