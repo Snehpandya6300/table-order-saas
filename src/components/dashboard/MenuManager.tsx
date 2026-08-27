@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -24,6 +24,11 @@ import {
   ToggleRight,
   X,
   Image,
+  Upload,
+  FileSpreadsheet,
+  Camera,
+  Check,
+  AlertCircle,
 } from "lucide-react";
 
 export function MenuManager({
@@ -57,6 +62,24 @@ export function MenuManager({
     isVeg: false,
   });
 
+  // Bulk CSV upload state
+  const [showCsvDialog, setShowCsvDialog] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [csvError, setCsvError] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ success: number; failed: number } | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  // Photo menu upload state
+  const [showPhotoDialog, setShowPhotoDialog] = useState(false);
+  const [menuPhoto, setMenuPhoto] = useState<File | null>(null);
+  const [menuPhotoPreview, setMenuPhotoPreview] = useState<string | null>(null);
+  const [photoItems, setPhotoItems] = useState<any[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
   if (!categories || !menuItems) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -67,6 +90,7 @@ export function MenuManager({
 
   const sortedCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
 
+  // ─── Category Handlers ─────────────────────────────────────
   const openAddCategory = () => {
     setEditingCategory(null);
     setCategoryName("");
@@ -93,6 +117,7 @@ export function MenuManager({
     setShowCategoryDialog(false);
   };
 
+  // ─── Item Handlers ─────────────────────────────────────────
   const openAddItem = (categoryId?: string) => {
     setEditingItem(null);
     setItemForm({
@@ -152,6 +177,204 @@ export function MenuManager({
     setShowItemDialog(false);
   };
 
+  // ─── CSV Handlers ──────────────────────────────────────────
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFile(file);
+    setCsvError("");
+    setImportResult(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split("\n").filter((line) => line.trim());
+      if (lines.length < 2) {
+        setCsvError("CSV must have a header row and at least one data row.");
+        return;
+      }
+
+      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+      const nameIdx = headers.findIndex((h) => h === "name");
+      const priceIdx = headers.findIndex((h) => h === "price");
+      const categoryIdx = headers.findIndex((h) => h === "category");
+      const descIdx = headers.findIndex((h) => h === "description");
+      const vegIdx = headers.findIndex((h) => h === "veg" || h === "isveg");
+
+      if (nameIdx === -1 || priceIdx === -1 || categoryIdx === -1) {
+        setCsvError("CSV must have 'name', 'price', and 'category' columns.");
+        return;
+      }
+
+      const items = lines.slice(1).map((line) => {
+        const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+        return {
+          name: cols[nameIdx] || "",
+          price: cols[priceIdx] || "",
+          category: cols[categoryIdx] || "",
+          description: descIdx !== -1 ? cols[descIdx] || "" : "",
+          isVeg: vegIdx !== -1 ? cols[vegIdx]?.toLowerCase() === "true" || cols[vegIdx] === "1" : false,
+        };
+      }).filter((item) => item.name && item.price);
+
+      setCsvPreview(items);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportCsv = async () => {
+    if (!csvPreview.length) return;
+    setIsImporting(true);
+    let success = 0;
+    let failed = 0;
+
+    for (const item of csvPreview) {
+      try {
+        // Find or create category
+        let categoryId: Id<"categories">;
+        const existing = sortedCategories.find(
+          (c) => c.name.toLowerCase() === item.category.toLowerCase()
+        );
+        if (existing) {
+          categoryId = existing._id;
+        } else {
+          categoryId = await createCategory({
+            restaurantId,
+            name: item.category,
+            sortOrder: categories.length + success,
+          });
+        }
+
+        const price = parseFloat(item.price);
+        if (isNaN(price) || price < 0) {
+          failed++;
+          continue;
+        }
+
+        const catItems = menuItems.filter(
+          (i) => i.categoryId === categoryId
+        );
+        await createItem({
+          restaurantId,
+          categoryId,
+          name: item.name,
+          description: item.description || undefined,
+          price,
+          isVeg: item.isVeg,
+          sortOrder: catItems.length + success,
+        });
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+
+    setImportResult({ success, failed });
+    setIsImporting(false);
+  };
+
+  // ─── Photo Menu Handlers ───────────────────────────────────
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setMenuPhoto(file);
+    setPhotoError("");
+    setPhotoItems([]);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setMenuPhotoPreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAnalyzePhoto = async () => {
+    if (!menuPhoto) return;
+    setIsAnalyzing(true);
+    setPhotoError("");
+
+    try {
+      // Simulate AI analysis - in production, you'd call a vision API
+      // For now, we'll create a simple form for manual entry based on the photo
+      setPhotoError("");
+      // Create placeholder items that the user can edit
+      setPhotoItems([
+        { name: "", price: "", category: "", description: "", isVeg: false },
+      ]);
+    } catch {
+      setPhotoError("Failed to analyze photo. Please try again.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleAddPhotoItem = () => {
+    setPhotoItems([
+      ...photoItems,
+      { name: "", price: "", category: "", description: "", isVeg: false },
+    ]);
+  };
+
+  const handleUpdatePhotoItem = (index: number, field: string, value: any) => {
+    const updated = [...photoItems];
+    updated[index] = { ...updated[index], [field]: value };
+    setPhotoItems(updated);
+  };
+
+  const handleRemovePhotoItem = (index: number) => {
+    setPhotoItems(photoItems.filter((_, i) => i !== index));
+  };
+
+  const handleImportPhotoItems = async () => {
+    setIsImporting(true);
+    let success = 0;
+
+    for (const item of photoItems) {
+      if (!item.name || !item.price || !item.category) continue;
+      try {
+        let categoryId: Id<"categories">;
+        const existing = sortedCategories.find(
+          (c) => c.name.toLowerCase() === item.category.toLowerCase()
+        );
+        if (existing) {
+          categoryId = existing._id;
+        } else {
+          categoryId = await createCategory({
+            restaurantId,
+            name: item.category,
+            sortOrder: categories.length + success,
+          });
+        }
+
+        const price = parseFloat(item.price);
+        if (isNaN(price)) continue;
+
+        const catItems = menuItems.filter(
+          (i) => i.categoryId === categoryId
+        );
+        await createItem({
+          restaurantId,
+          categoryId,
+          name: item.name,
+          description: item.description || undefined,
+          price,
+          isVeg: item.isVeg,
+          sortOrder: catItems.length + success,
+        });
+        success++;
+      } catch {
+        // Skip failed items
+      }
+    }
+
+    setImportResult({ success, failed: photoItems.length - success });
+    setIsImporting(false);
+    setShowPhotoDialog(false);
+    setMenuPhoto(null);
+    setMenuPhotoPreview(null);
+    setPhotoItems([]);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -161,7 +384,7 @@ export function MenuManager({
             Manage your categories and menu items.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
           <Button
             variant="outline"
             size="sm"
@@ -170,6 +393,24 @@ export function MenuManager({
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             Category
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => setShowCsvDialog(true)}
+          >
+            <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
+            CSV Upload
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => setShowPhotoDialog(true)}
+          >
+            <Camera className="mr-1.5 h-3.5 w-3.5" />
+            Photo Menu
           </Button>
           <Button
             size="sm"
@@ -344,6 +585,29 @@ export function MenuManager({
         </div>
       )}
 
+      {/* Import Result Toast */}
+      {importResult && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white border rounded-lg shadow-lg p-4 flex items-center gap-3">
+          <Check className="h-5 w-5 text-emerald-500" />
+          <div>
+            <p className="text-sm font-medium">
+              Imported {importResult.success} items
+              {importResult.failed > 0 && (
+                <span className="text-muted-foreground">
+                  {" "}({importResult.failed} failed)
+                </span>
+              )}
+            </p>
+          </div>
+          <button
+            className="cursor-pointer text-muted-foreground hover:text-foreground"
+            onClick={() => setImportResult(null)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Category Dialog */}
       <Dialog
         open={showCategoryDialog}
@@ -491,6 +755,264 @@ export function MenuManager({
             >
               {editingItem ? "Save" : "Add Item"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Upload Dialog */}
+      <Dialog open={showCsvDialog} onOpenChange={setShowCsvDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Bulk Upload via CSV</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-muted/50 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground mb-2">
+                <strong>CSV Format:</strong> Your CSV must have these columns:
+              </p>
+              <code className="text-[11px] bg-background px-2 py-1 rounded">
+                name, price, category, description, veg
+              </code>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Example: <code>Margherita Pizza, 12.99, Pizza, Classic cheese pizza, true</code>
+              </p>
+            </div>
+
+            <div>
+              <input
+                type="file"
+                accept=".csv"
+                className="hidden"
+                ref={csvInputRef}
+                onChange={handleCsvUpload}
+              />
+              <Button
+                variant="outline"
+                className="cursor-pointer w-full"
+                onClick={() => csvInputRef.current?.click()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {csvFile ? csvFile.name : "Choose CSV File"}
+              </Button>
+            </div>
+
+            {csvError && (
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                {csvError}
+              </div>
+            )}
+
+            {csvPreview.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">
+                  Preview ({csvPreview.length} items):
+                </p>
+                <div className="max-h-48 overflow-y-auto border rounded-lg divide-y">
+                  {csvPreview.slice(0, 10).map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 p-2 text-xs">
+                      <span className="font-medium flex-1">{item.name}</span>
+                      <span className="text-muted-foreground">{item.category}</span>
+                      <span className="font-medium">${parseFloat(item.price).toFixed(2)}</span>
+                      {item.isVeg && <Leaf className="h-3 w-3 text-emerald-600" />}
+                    </div>
+                  ))}
+                  {csvPreview.length > 10 && (
+                    <div className="p-2 text-xs text-muted-foreground text-center">
+                      ...and {csvPreview.length - 10} more items
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {importResult && (
+              <div className="flex items-center gap-2 text-sm text-emerald-600">
+                <Check className="h-4 w-4" />
+                Imported {importResult.success} items
+                {importResult.failed > 0 && ` (${importResult.failed} failed)`}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="cursor-pointer"
+              onClick={() => {
+                setShowCsvDialog(false);
+                setCsvFile(null);
+                setCsvPreview([]);
+                setCsvError("");
+                setImportResult(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="cursor-pointer"
+              onClick={handleImportCsv}
+              disabled={isImporting || csvPreview.length === 0}
+            >
+              {isImporting ? "Importing..." : `Import ${csvPreview.length} Items`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Photo Menu Dialog */}
+      <Dialog open={showPhotoDialog} onOpenChange={setShowPhotoDialog}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Photo Menu Upload</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Upload a photo of your printed menu and add items from it.
+            </p>
+
+            <div>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                ref={photoInputRef}
+                onChange={handlePhotoUpload}
+              />
+              <Button
+                variant="outline"
+                className="cursor-pointer w-full h-24 border-dashed"
+                onClick={() => photoInputRef.current?.click()}
+              >
+                {menuPhotoPreview ? (
+                  <img
+                    src={menuPhotoPreview}
+                    alt="Menu preview"
+                    className="h-full max-h-20 object-contain rounded"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <Camera className="mx-auto h-6 w-6 text-muted-foreground mb-1" />
+                    <span className="text-xs text-muted-foreground">
+                      Click to upload menu photo
+                    </span>
+                  </div>
+                )}
+              </Button>
+            </div>
+
+            {menuPhoto && photoItems.length === 0 && (
+              <Button
+                className="cursor-pointer w-full"
+                onClick={handleAnalyzePhoto}
+                disabled={isAnalyzing}
+              >
+                {isAnalyzing ? "Analyzing..." : "Start Adding Items"}
+              </Button>
+            )}
+
+            {photoError && (
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                {photoError}
+              </div>
+            )}
+
+            {photoItems.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium">
+                  Add items from your menu photo:
+                </p>
+                <div className="max-h-64 overflow-y-auto space-y-3">
+                  {photoItems.map((item, index) => (
+                    <div
+                      key={index}
+                      className="grid grid-cols-2 gap-2 p-2 bg-muted/30 rounded-lg relative"
+                    >
+                      {photoItems.length > 1 && (
+                        <button
+                          className="absolute top-1 right-1 cursor-pointer text-destructive hover:text-destructive"
+                          onClick={() => handleRemovePhotoItem(index)}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      <Input
+                        placeholder="Item name"
+                        value={item.name}
+                        onChange={(e) =>
+                          handleUpdatePhotoItem(index, "name", e.target.value)
+                        }
+                        className="text-xs"
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Price"
+                        value={item.price}
+                        onChange={(e) =>
+                          handleUpdatePhotoItem(index, "price", e.target.value)
+                        }
+                        className="text-xs"
+                      />
+                      <Input
+                        placeholder="Category"
+                        value={item.category}
+                        onChange={(e) =>
+                          handleUpdatePhotoItem(index, "category", e.target.value)
+                        }
+                        className="text-xs"
+                      />
+                      <label className="flex items-center gap-1 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={item.isVeg}
+                          onChange={(e) =>
+                            handleUpdatePhotoItem(index, "isVeg", e.target.checked)
+                          }
+                          className="rounded"
+                        />
+                        <Leaf className="h-3 w-3 text-emerald-600" />
+                        Veg
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="cursor-pointer"
+                  onClick={handleAddPhotoItem}
+                >
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add Another Item
+                </Button>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="cursor-pointer"
+              onClick={() => {
+                setShowPhotoDialog(false);
+                setMenuPhoto(null);
+                setMenuPhotoPreview(null);
+                setPhotoItems([]);
+                setPhotoError("");
+              }}
+            >
+              Cancel
+            </Button>
+            {photoItems.length > 0 && (
+              <Button
+                className="cursor-pointer"
+                onClick={handleImportPhotoItems}
+                disabled={isImporting || photoItems.filter((i) => i.name && i.price).length === 0}
+              >
+                {isImporting
+                  ? "Importing..."
+                  : `Import ${photoItems.filter((i) => i.name && i.price).length} Items`}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

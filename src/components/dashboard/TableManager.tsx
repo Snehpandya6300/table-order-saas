@@ -24,6 +24,8 @@ import {
   LayoutGrid,
   CheckCircle2,
   XCircle,
+  ListPlus,
+  Layers,
 } from "lucide-react";
 
 export function TableManager({
@@ -44,6 +46,13 @@ export function TableManager({
   const [editingTable, setEditingTable] = useState<Id<"tables"> | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Bulk add state
+  const [showBulkDialog, setShowBulkDialog] = useState(false);
+  const [bulkPrefix, setBulkPrefix] = useState("Table");
+  const [bulkStart, setBulkStart] = useState(1);
+  const [bulkCount, setBulkCount] = useState(10);
+  const [bulkCreating, setBulkCreating] = useState(false);
 
   if (!tables) {
     return (
@@ -88,6 +97,23 @@ export function TableManager({
     setEditLabel("");
   };
 
+  const handleBulkCreate = async () => {
+    setBulkCreating(true);
+    try {
+      for (let i = 0; i < bulkCount; i++) {
+        const num = bulkStart + i;
+        const label = `${bulkPrefix} ${num}`;
+        await createTable({ restaurantId, label });
+      }
+      setShowBulkDialog(false);
+      setBulkPrefix("Table");
+      setBulkStart(1);
+      setBulkCount(10);
+    } finally {
+      setBulkCreating(false);
+    }
+  };
+
   const sortedTables = [...tables].sort((a, b) =>
     a.label.localeCompare(b.label),
   );
@@ -101,14 +127,25 @@ export function TableManager({
             Create tables and generate QR codes for table-based ordering.
           </p>
         </div>
-        <Button
-          size="sm"
-          className="cursor-pointer"
-          onClick={() => setShowNewTableDialog(true)}
-        >
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
-          New Table
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="cursor-pointer"
+            onClick={() => setShowBulkDialog(true)}
+          >
+            <ListPlus className="mr-1.5 h-3.5 w-3.5" />
+            Bulk Add
+          </Button>
+          <Button
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => setShowNewTableDialog(true)}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            New Table
+          </Button>
+        </div>
       </div>
 
       {sortedTables.length === 0 ? (
@@ -118,6 +155,25 @@ export function TableManager({
             <p className="text-sm text-muted-foreground">
               No tables yet. Create your first table to start taking orders.
             </p>
+            <div className="mt-4 flex justify-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="cursor-pointer"
+                onClick={() => setShowBulkDialog(true)}
+              >
+                <ListPlus className="mr-1.5 h-3.5 w-3.5" />
+                Bulk Add Tables
+              </Button>
+              <Button
+                size="sm"
+                className="cursor-pointer"
+                onClick={() => setShowNewTableDialog(true)}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Add One Table
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -256,6 +312,7 @@ export function TableManager({
         </div>
       )}
 
+      {/* Single Table Dialog */}
       <Dialog open={showNewTableDialog} onOpenChange={setShowNewTableDialog}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -292,6 +349,137 @@ export function TableManager({
               disabled={!newTableLabel.trim()}
             >
               Create Table
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Add Dialog */}
+      <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              Bulk Add Tables
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Quick Presets */}
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Quick Presets
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { prefix: "Table", start: 1, count: 5, label: "5 Tables" },
+                  { prefix: "Table", start: 1, count: 10, label: "10 Tables" },
+                  { prefix: "Table", start: 1, count: 20, label: "20 Tables" },
+                  { prefix: "Counter", start: 1, count: 5, label: "5 Counters" },
+                  { prefix: "Seat", start: 1, count: 10, label: "10 Seats" },
+                  { prefix: "Stall", start: 1, count: 8, label: "8 Stalls" },
+                ].map((preset) => (
+                  <Button
+                    key={preset.label}
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer text-xs h-7"
+                    onClick={() => {
+                      setBulkPrefix(preset.prefix);
+                      setBulkStart(preset.start);
+                      setBulkCount(preset.count);
+                    }}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Settings */}
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">
+                  Prefix
+                </label>
+                <Input
+                  placeholder="Table"
+                  value={bulkPrefix}
+                  onChange={(e) => setBulkPrefix(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">
+                  Start #
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={bulkStart}
+                  onChange={(e) => setBulkStart(parseInt(e.target.value) || 1)}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">
+                  Count
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={bulkCount}
+                  onChange={(e) => setBulkCount(parseInt(e.target.value) || 1)}
+                />
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div className="rounded-lg bg-muted/50 p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                Preview (first 5):
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {Array.from({ length: Math.min(bulkCount, 5) }, (_, i) => (
+                  <Badge key={i} variant="secondary" className="text-xs">
+                    {bulkPrefix} {bulkStart + i}
+                  </Badge>
+                ))}
+                {bulkCount > 5 && (
+                  <Badge variant="secondary" className="text-xs">
+                    +{bulkCount - 5} more
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Each table will get a unique QR code. You can manage, rename, or
+              disable individual tables after creation.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="cursor-pointer"
+              onClick={() => setShowBulkDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="cursor-pointer"
+              onClick={handleBulkCreate}
+              disabled={bulkCreating || bulkCount < 1}
+            >
+              {bulkCreating ? (
+                <>
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Creating {bulkCount} tables...
+                </>
+              ) : (
+                <>
+                  <Layers className="mr-1.5 h-3.5 w-3.5" />
+                  Create {bulkCount} Tables
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

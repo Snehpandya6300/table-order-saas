@@ -145,6 +145,7 @@ const schema = defineSchema({
     ),
     name: v.string(),
     email: v.string(),
+    phone: v.optional(v.string()),
     isActive: v.boolean(),
     createdAt: v.number(),
   })
