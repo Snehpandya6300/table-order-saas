@@ -137,7 +137,7 @@ const schema = defineSchema({
   // Staff management
   staff: defineTable({
     restaurantId: v.id("restaurants"),
-    userId: v.id("users"),
+    userId: v.optional(v.id("users")),
     role: v.union(
       v.literal("owner"),
       v.literal("manager"),
