@@ -114,17 +114,17 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-lg">
+      <header className="sticky top-0 z-40 border-b border-orange-100 bg-white/90 backdrop-blur-lg shadow-sm">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground">
-              <QrCode className="h-4 w-4 text-background" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 shadow-md shadow-orange-200">
+              <QrCode className="h-4.5 w-4.5 text-white" />
             </div>
             <div>
-              <h1 className="text-sm font-semibold leading-none">
+              <h1 className="text-sm font-bold leading-none text-gray-900">
                 {restaurant?.name}
               </h1>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <p className="text-[11px] text-orange-500 font-medium mt-0.5">
                 QR Table Order
               </p>
             </div>
@@ -132,7 +132,7 @@ export default function Dashboard() {
           <Button
             variant="ghost"
             size="sm"
-            className="cursor-pointer text-muted-foreground"
+            className="cursor-pointer text-gray-500 hover:text-orange-500 hover:bg-orange-50"
             onClick={handleSignOut}
           >
             <LogOut className="mr-1.5 h-3.5 w-3.5" />
@@ -145,48 +145,48 @@ export default function Dashboard() {
         {/* Stats */}
         {stats && (
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
-            <Card className="p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+            <Card className="p-4 border-orange-100 bg-gradient-to-br from-white to-orange-50/30">
+              <div className="flex items-center gap-2 text-orange-500 mb-1">
                 <ShoppingBag className="h-3.5 w-3.5" />
-                <span className="text-xs">Today&apos;s Orders</span>
+                <span className="text-xs font-medium">Today&apos;s Orders</span>
               </div>
-              <span className="text-2xl font-bold">{stats.todayOrders}</span>
+              <span className="text-2xl font-bold text-gray-900">{stats.todayOrders}</span>
             </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+            <Card className="p-4 border-orange-100 bg-gradient-to-br from-white to-amber-50/30">
+              <div className="flex items-center gap-2 text-amber-500 mb-1">
                 <TrendingUp className="h-3.5 w-3.5" />
-                <span className="text-xs">Today&apos;s Revenue</span>
+                <span className="text-xs font-medium">Today&apos;s Revenue</span>
               </div>
-              <span className="text-2xl font-bold">
+              <span className="text-2xl font-bold text-gray-900">
                 ${stats.todayRevenue.toFixed(2)}
               </span>
             </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+            <Card className="p-4 border-orange-100 bg-gradient-to-br from-white to-orange-50/30">
+              <div className="flex items-center gap-2 text-orange-400 mb-1">
                 <Clock className="h-3.5 w-3.5" />
-                <span className="text-xs">Pending</span>
+                <span className="text-xs font-medium">Pending</span>
               </div>
-              <span className="text-2xl font-bold">{stats.pendingOrders}</span>
+              <span className="text-2xl font-bold text-gray-900">{stats.pendingOrders}</span>
             </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+            <Card className="p-4 border-orange-100 bg-gradient-to-br from-white to-amber-50/30">
+              <div className="flex items-center gap-2 text-amber-400 mb-1">
                 <ClipboardList className="h-3.5 w-3.5" />
-                <span className="text-xs">Total Orders</span>
+                <span className="text-xs font-medium">Total Orders</span>
               </div>
-              <span className="text-2xl font-bold">{stats.totalOrders}</span>
+              <span className="text-2xl font-bold text-gray-900">{stats.totalOrders}</span>
             </Card>
           </div>
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-6 border-b border-border/50 overflow-x-auto">
+        <div className="flex gap-1 mb-6 border-b border-orange-100 overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
                 activeTab === tab.id
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  ? "border-orange-500 text-orange-600"
+                  : "border-transparent text-gray-400 hover:text-orange-400"
               }`}
               onClick={() => setActiveTab(tab.id)}
             >
