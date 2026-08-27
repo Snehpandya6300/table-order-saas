@@ -35,6 +35,35 @@ export const list = query({
   },
 });
 
+// Get restaurants where the user is a staff member (not owner)
+export const getByStaffEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    // Find staff records matching this email
+    const staffRecords = await ctx.db
+      .query("staff")
+      .collect();
+    const matchingStaff = staffRecords.filter(
+      (s) => s.email.toLowerCase() === args.email.toLowerCase() && s.isActive,
+    );
+    if (matchingStaff.length === 0) return [];
+
+    // Get the restaurants for these staff records
+    const restaurants = [];
+    for (const staff of matchingStaff) {
+      const restaurant = await ctx.db.get(staff.restaurantId);
+      if (restaurant) {
+        restaurants.push({
+          ...restaurant,
+          staffRole: staff.role,
+          staffName: staff.name,
+        });
+      }
+    }
+    return restaurants;
+  },
+});
+
 export const create = mutation({
   args: {
     name: v.string(),

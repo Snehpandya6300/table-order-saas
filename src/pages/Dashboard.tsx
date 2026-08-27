@@ -37,12 +37,12 @@ import { useNavigate } from "react-router";
 
 type Tab = "orders" | "menu" | "tables" | "staff" | "settings";
 
-const TABS: { id: Tab; label: string; icon: typeof Utensils }[] = [
+const ALL_TABS: { id: Tab; label: string; icon: typeof Utensils; minRole?: string }[] = [
   { id: "orders", label: "Orders", icon: ClipboardList },
-  { id: "menu", label: "Menu", icon: Menu },
-  { id: "tables", label: "Tables", icon: LayoutGrid },
-  { id: "staff", label: "Staff", icon: Users },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "menu", label: "Menu", icon: Menu, minRole: "manager" },
+  { id: "tables", label: "Tables", icon: LayoutGrid, minRole: "manager" },
+  { id: "staff", label: "Staff", icon: Users, minRole: "owner" },
+  { id: "settings", label: "Settings", icon: Settings, minRole: "owner" },
 ];
 
 export default function Dashboard() {
@@ -50,15 +50,34 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("orders");
 
-  const restaurants = useQuery(
+  const ownedRestaurants = useQuery(
     api.restaurants.getByOwner,
     user?._id ? { ownerId: user._id } : "skip",
   );
+  const staffRestaurants = useQuery(
+    api.restaurants.getByStaffEmail,
+    user?.email ? { email: user.email } : "skip",
+  );
+
+  // Merge: owned restaurants first, then staff restaurants (deduped)
+  const restaurants = ownedRestaurants && staffRestaurants
+    ? [
+        ...ownedRestaurants,
+        ...staffRestaurants.filter(
+          (sr) => !ownedRestaurants.some((or) => or._id === sr._id),
+        ),
+      ]
+    : undefined;
+  const restaurant = restaurants?.[0];
+  // Check if current user is owner or staff
+  const isOwner = ownedRestaurants?.some((r) => r._id === restaurant?._id);
+  const staffRole = staffRestaurants?.find((r) => r._id === restaurant?._id)?.staffRole as "owner" | "manager" | "staff" | undefined;
+
   const updateRestaurant = useMutation(api.restaurants.update);
   const stats = useQuery(
     api.orders.getStats,
-    restaurants?.[0]?._id
-      ? { restaurantId: restaurants[0]._id }
+    restaurant?._id
+      ? { restaurantId: restaurant._id }
       : "skip",
   );
 
@@ -69,8 +88,6 @@ export default function Dashboard() {
     phone: "",
     address: "",
   });
-
-  const restaurant = restaurants?.[0];
 
   const handleSignOut = async () => {
     await signOut();
@@ -121,9 +138,16 @@ export default function Dashboard() {
               <QrCode className="h-4.5 w-4.5 text-white" />
             </div>
             <div>
-              <h1 className="text-sm font-bold leading-none text-gray-900">
-                {restaurant?.name}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-bold leading-none text-gray-900">
+                  {restaurant?.name}
+                </h1>
+                {!isOwner && staffRole && (
+                  <Badge variant="outline" className="text-[10px] capitalize bg-blue-50 text-blue-600 border-blue-200">
+                    {staffRole}
+                  </Badge>
+                )}
+              </div>
               <p className="text-[11px] text-orange-500 font-medium mt-0.5">
                 QR Table Order
               </p>
@@ -180,7 +204,16 @@ export default function Dashboard() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-orange-100 overflow-x-auto">
-          {TABS.map((tab) => (
+          {ALL_TABS.filter((tab) => {
+            // Staff can only see Orders
+            if (!isOwner && !staffRole) return tab.id === "orders";
+            // Staff role: only Orders
+            if (staffRole === "staff") return tab.id === "orders";
+            // Manager role: Orders, Menu, Tables
+            if (staffRole === "manager") return !tab.minRole || tab.minRole === "manager";
+            // Owner: all tabs
+            return true;
+          }).map((tab) => (
             <button
               key={tab.id}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
