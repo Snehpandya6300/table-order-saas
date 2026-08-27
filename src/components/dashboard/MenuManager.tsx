@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,7 @@ export function MenuManager({
   const createItem = useMutation(api.menuItems.create);
   const updateItem = useMutation(api.menuItems.update);
   const deleteItem = useMutation(api.menuItems.remove);
+  const analyzeMenuPhoto = useAction(api.menuAi.analyzeMenuPhoto);
 
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Id<"categories"> | null>(null);
@@ -208,9 +209,13 @@ export function MenuManager({
 
       const items = lines.slice(1).map((line) => {
         const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+        // Clean price: remove ₹, $, commas, spaces
+        const rawPrice = cols[priceIdx] || "";
+        const cleanPrice = rawPrice.replace(/[₹$€£\s,]/g, "");
         return {
           name: cols[nameIdx] || "",
-          price: cols[priceIdx] || "",
+          price: cleanPrice,
+          rawPrice: rawPrice,
           category: cols[categoryIdx] || "",
           description: descIdx !== -1 ? cols[descIdx] || "" : "",
           isVeg: vegIdx !== -1 ? cols[vegIdx]?.toLowerCase() === "true" || cols[vegIdx] === "1" : false,
@@ -246,7 +251,7 @@ export function MenuManager({
         }
 
         const price = parseFloat(item.price);
-        if (isNaN(price) || price < 0) {
+        if (isNaN(price) || price <= 0) {
           failed++;
           continue;
         }
@@ -294,15 +299,31 @@ export function MenuManager({
     setPhotoError("");
 
     try {
-      // Simulate AI analysis - in production, you'd call a vision API
-      // For now, we'll create a simple form for manual entry based on the photo
-      setPhotoError("");
-      // Create placeholder items that the user can edit
-      setPhotoItems([
-        { name: "", price: "", category: "", description: "", isVeg: false },
-      ]);
-    } catch {
-      setPhotoError("Failed to analyze photo. Please try again.");
+      // Convert image to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = (event) => {
+          const result = event.target?.result as string;
+          // Remove data:image/...;base64, prefix
+          const base64 = result.split(",")[1];
+          resolve(base64);
+        };
+        reader.readAsDataURL(menuPhoto);
+      });
+      const imageBase64 = await base64Promise;
+
+      // Call AI vision API
+      const extractedItems = await analyzeMenuPhoto({ imageBase64 });
+
+      if (extractedItems.length === 0) {
+        setPhotoError("No menu items found in the photo. Try a clearer image.");
+        return;
+      }
+
+      setPhotoItems(extractedItems);
+    } catch (error: any) {
+      console.error("Photo analysis error:", error);
+      setPhotoError(error.message || "Failed to analyze photo. Please try again.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -813,7 +834,7 @@ export function MenuManager({
                     <div key={i} className="flex items-center gap-3 p-2 text-xs">
                       <span className="font-medium flex-1">{item.name}</span>
                       <span className="text-muted-foreground">{item.category}</span>
-                      <span className="font-medium">${parseFloat(item.price).toFixed(2)}</span>
+                      <span className="font-medium">{item.rawPrice || `₹${parseFloat(item.price).toFixed(2)}`}</span>
                       {item.isVeg && <Leaf className="h-3 w-3 text-emerald-600" />}
                     </div>
                   ))}
@@ -867,7 +888,7 @@ export function MenuManager({
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Upload a photo of your printed menu and add items from it.
+              Upload a photo of your printed menu. AI will automatically detect and extract all menu items with names, prices, categories, and veg/non-veg status.
             </p>
 
             <div>
@@ -946,7 +967,7 @@ export function MenuManager({
                       />
                       <Input
                         type="number"
-                        placeholder="Price"
+                        placeholder="Price (₹/$)"
                         value={item.price}
                         onChange={(e) =>
                           handleUpdatePhotoItem(index, "price", e.target.value)
@@ -973,6 +994,16 @@ export function MenuManager({
                         <Leaf className="h-3 w-3 text-emerald-600" />
                         Veg
                       </label>
+                      {item.description && (
+                        <Input
+                          placeholder="Description"
+                          value={item.description}
+                          onChange={(e) =>
+                            handleUpdatePhotoItem(index, "description", e.target.value)
+                          }
+                          className="text-xs col-span-2"
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
