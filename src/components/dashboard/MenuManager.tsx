@@ -76,9 +76,17 @@ export function MenuManager({
   const [showPhotoDialog, setShowPhotoDialog] = useState(false);
   const [menuPhoto, setMenuPhoto] = useState<File | null>(null);
   const [menuPhotoPreview, setMenuPhotoPreview] = useState<string | null>(null);
-  const [photoItems, setPhotoItems] = useState<any[]>([]);
+  const [photoItems, setPhotoItems] = useState<{
+    name: string;
+    price: string;
+    category: string;
+    description: string;
+    isVeg: boolean;
+    _originalPrice?: number | null;
+  }[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [photoError, setPhotoError] = useState("");
+  const [analyzingStep, setAnalyzingStep] = useState("");
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   if (!categories || !menuItems) {
@@ -299,12 +307,15 @@ export function MenuManager({
     setPhotoError("");
 
     try {
+      // Show loading steps
+      setAnalyzingStep("Reading menu image...");
+      await new Promise(r => setTimeout(r, 500));
+      
       // Convert image to base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
         reader.onload = (event) => {
           const result = event.target?.result as string;
-          // Remove data:image/...;base64, prefix
           const base64 = result.split(",")[1];
           resolve(base64);
         };
@@ -312,6 +323,11 @@ export function MenuManager({
       });
       const imageBase64 = await base64Promise;
 
+      setAnalyzingStep("Detecting items and prices...");
+      await new Promise(r => setTimeout(r, 500));
+      
+      setAnalyzingStep("Analyzing with AI...");
+      
       // Call AI vision API
       const extractedItems = await analyzeMenuPhoto({ imageBase64 });
 
@@ -320,12 +336,23 @@ export function MenuManager({
         return;
       }
 
-      setPhotoItems(extractedItems);
+      // Transform items for review UI
+      const reviewItems = extractedItems.map((item) => ({
+        name: item.name,
+        price: item.price !== null ? String(item.price) : "",
+        category: item.category,
+        description: item.description || "",
+        isVeg: item.isVeg ?? false,
+        _originalPrice: item.price,
+      }));
+
+      setPhotoItems(reviewItems);
     } catch (error: any) {
       console.error("Photo analysis error:", error);
       setPhotoError(error.message || "Failed to analyze photo. Please try again.");
     } finally {
       setIsAnalyzing(false);
+      setAnalyzingStep("");
     }
   };
 
@@ -349,9 +376,13 @@ export function MenuManager({
   const handleImportPhotoItems = async () => {
     setIsImporting(true);
     let success = 0;
+    let failed = 0;
 
     for (const item of photoItems) {
-      if (!item.name || !item.price || !item.category) continue;
+      if (!item.name || !item.category) {
+        failed++;
+        continue;
+      }
       try {
         let categoryId: Id<"categories">;
         const existing = sortedCategories.find(
@@ -367,8 +398,11 @@ export function MenuManager({
           });
         }
 
-        const price = parseFloat(item.price);
-        if (isNaN(price)) continue;
+        const price = item.price ? parseFloat(item.price) : 0;
+        if (item.price && isNaN(price)) {
+          failed++;
+          continue;
+        }
 
         const catItems = menuItems.filter(
           (i) => i.categoryId === categoryId
@@ -378,17 +412,17 @@ export function MenuManager({
           categoryId,
           name: item.name,
           description: item.description || undefined,
-          price,
+          price: price || 0,
           isVeg: item.isVeg,
           sortOrder: catItems.length + success,
         });
         success++;
       } catch {
-        // Skip failed items
+        failed++;
       }
     }
 
-    setImportResult({ success, failed: photoItems.length - success });
+    setImportResult({ success, failed });
     setIsImporting(false);
     setShowPhotoDialog(false);
     setMenuPhoto(null);
@@ -927,7 +961,14 @@ export function MenuManager({
                 onClick={handleAnalyzePhoto}
                 disabled={isAnalyzing}
               >
-                {isAnalyzing ? "Analyzing..." : "Start Adding Items"}
+                {isAnalyzing ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                    {analyzingStep || "Analyzing..."}
+                  </span>
+                ) : (
+                  "Start Analyzing"
+                )}
               </Button>
             )}
 
@@ -940,70 +981,87 @@ export function MenuManager({
 
             {photoItems.length > 0 && (
               <div className="space-y-3">
-                <p className="text-sm font-medium">
-                  Add items from your menu photo:
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">
+                    Found {photoItems.length} menu items
+                  </p>
+                  <Badge variant="outline" className="text-[10px]">
+                    {photoItems.filter(i => i.price).length} with prices
+                  </Badge>
+                </div>
                 <div className="max-h-64 overflow-y-auto space-y-3">
                   {photoItems.map((item, index) => (
                     <div
                       key={index}
-                      className="grid grid-cols-2 gap-2 p-2 bg-muted/30 rounded-lg relative"
+                      className="p-3 bg-muted/30 rounded-lg relative border border-orange-100"
                     >
-                      {photoItems.length > 1 && (
-                        <button
-                          className="absolute top-1 right-1 cursor-pointer text-destructive hover:text-destructive"
-                          onClick={() => handleRemovePhotoItem(index)}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      <Input
-                        placeholder="Item name"
-                        value={item.name}
-                        onChange={(e) =>
-                          handleUpdatePhotoItem(index, "name", e.target.value)
-                        }
-                        className="text-xs"
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Price (₹/$)"
-                        value={item.price}
-                        onChange={(e) =>
-                          handleUpdatePhotoItem(index, "price", e.target.value)
-                        }
-                        className="text-xs"
-                      />
-                      <Input
-                        placeholder="Category"
-                        value={item.category}
-                        onChange={(e) =>
-                          handleUpdatePhotoItem(index, "category", e.target.value)
-                        }
-                        className="text-xs"
-                      />
-                      <label className="flex items-center gap-1 text-xs cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={item.isVeg}
-                          onChange={(e) =>
-                            handleUpdatePhotoItem(index, "isVeg", e.target.checked)
-                          }
-                          className="rounded"
-                        />
-                        <Leaf className="h-3 w-3 text-emerald-600" />
-                        Veg
-                      </label>
-                      {item.description && (
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          #{index + 1}
+                        </span>
+                        {photoItems.length > 1 && (
+                          <button
+                            className="cursor-pointer text-destructive hover:text-destructive"
+                            onClick={() => handleRemovePhotoItem(index)}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
                         <Input
-                          placeholder="Description"
-                          value={item.description}
+                          placeholder="Item name"
+                          value={item.name}
                           onChange={(e) =>
-                            handleUpdatePhotoItem(index, "description", e.target.value)
+                            handleUpdatePhotoItem(index, "name", e.target.value)
                           }
-                          className="text-xs col-span-2"
+                          className="text-xs"
                         />
-                      )}
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            placeholder="Price"
+                            value={item.price}
+                            onChange={(e) =>
+                              handleUpdatePhotoItem(index, "price", e.target.value)
+                            }
+                            className={`text-xs ${!item.price ? 'border-amber-300 bg-amber-50' : ''}`}
+                          />
+                          {!item.price && (
+                            <span className="absolute -top-1 -right-1 text-amber-500 text-[10px] bg-white px-1 rounded">
+                              ⚠ Verify
+                            </span>
+                          )}
+                        </div>
+                        <Input
+                          placeholder="Category"
+                          value={item.category}
+                          onChange={(e) =>
+                            handleUpdatePhotoItem(index, "category", e.target.value)
+                          }
+                          className="text-xs"
+                        />
+                        <label className="flex items-center gap-1 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={item.isVeg}
+                            onChange={(e) =>
+                              handleUpdatePhotoItem(index, "isVeg", e.target.checked)
+                            }
+                            className="rounded"
+                          />
+                          <Leaf className="h-3 w-3 text-emerald-600" />
+                          Veg
+                        </label>
+                      </div>
+                      <Input
+                        placeholder="Description (optional)"
+                        value={item.description}
+                        onChange={(e) =>
+                          handleUpdatePhotoItem(index, "description", e.target.value)
+                        }
+                        className="text-xs mt-2"
+                      />
                     </div>
                   ))}
                 </div>
@@ -1037,11 +1095,11 @@ export function MenuManager({
               <Button
                 className="cursor-pointer"
                 onClick={handleImportPhotoItems}
-                disabled={isImporting || photoItems.filter((i) => i.name && i.price).length === 0}
+                disabled={isImporting || photoItems.filter((i) => i.name).length === 0}
               >
                 {isImporting
                   ? "Importing..."
-                  : `Import ${photoItems.filter((i) => i.name && i.price).length} Items`}
+                  : `Import ${photoItems.filter((i) => i.name).length} Items`}
               </Button>
             )}
           </DialogFooter>
