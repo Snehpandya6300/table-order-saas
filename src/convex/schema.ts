@@ -33,9 +33,15 @@ const schema = defineSchema({
     ownerId: v.id("users"),
     isOpen: v.boolean(),
     subscriptionStatus: v.optional(
-      v.union(v.literal("active"), v.literal("trial"), v.literal("expired")),
+      v.union(v.literal("active"), v.literal("trial"), v.literal("expired"), v.literal("suspended")),
+    ),
+    subscriptionPlan: v.optional(
+      v.union(v.literal("free"), v.literal("pro"), v.literal("enterprise")),
     ),
     subscriptionEndsAt: v.optional(v.number()),
+    maxTables: v.optional(v.number()),
+    suspendedAt: v.optional(v.number()),
+    suspendedReason: v.optional(v.string()),
     nextTokenNumber: v.optional(v.number()),
     createdAt: v.number(),
   })
@@ -152,10 +158,21 @@ const schema = defineSchema({
     .index("by_restaurant", ["restaurantId"])
     .index("by_user", ["userId"]),
 
+  // Super admin settings (platform config)
   adminSettings: defineTable({
     key: v.string(),
     value: v.any(),
   }).index("by_key", ["key"]),
+
+  // Platform subscription plans config
+  subscriptionPlans: defineTable({
+    id: v.string(),
+    name: v.string(),
+    price: v.number(),
+    maxTables: v.number(),
+    features: v.array(v.string()),
+    isActive: v.boolean(),
+  }).index("by_planId", ["id"]),
 });
 
 export default schema;

@@ -35,6 +35,8 @@ export function TableManager({
   restaurantSlug: string;
 }) {
   const tables = useQuery(api.tables.getByRestaurant, { restaurantId });
+  const tableStats = useQuery(api.tables.getStats, { restaurantId });
+  const planLimits = useQuery(api.admin.getPlanLimits, { restaurantId });
   const createTable = useMutation(api.tables.create);
   const updateTable = useMutation(api.tables.update);
   const toggleActive = useMutation(api.tables.toggleActive);
@@ -82,12 +84,17 @@ export function TableManager({
 
   const handleCreateTable = async () => {
     if (!newTableLabel.trim()) return;
-    await createTable({
-      restaurantId,
-      label: newTableLabel.trim(),
-    });
-    setShowNewTableDialog(false);
-    setNewTableLabel("");
+    try {
+      await createTable({
+        restaurantId,
+        label: newTableLabel.trim(),
+      });
+      setShowNewTableDialog(false);
+      setNewTableLabel("");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(msg);
+    }
   };
 
   const handleUpdateTable = async (id: Id<"tables">) => {
@@ -99,11 +106,21 @@ export function TableManager({
 
   const handleBulkCreate = async () => {
     setBulkCreating(true);
+    let created = 0;
     try {
       for (let i = 0; i < bulkCount; i++) {
         const num = bulkStart + i;
         const label = `${bulkPrefix} ${num}`;
-        await createTable({ restaurantId, label });
+        try {
+          await createTable({ restaurantId, label });
+          created++;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("Table limit reached")) {
+            alert(`Stopped at ${created} tables. ${msg}`);
+            break;
+          }
+        }
       }
       setShowBulkDialog(false);
       setBulkPrefix("Table");
@@ -120,6 +137,44 @@ export function TableManager({
 
   return (
     <div className="space-y-6">
+      {/* Plan Limit Banner */}
+      {planLimits && (
+        <div className={`rounded-xl border p-4 flex items-center justify-between ${
+          !planLimits.canAddTable
+            ? "bg-amber-50 border-amber-200"
+            : planLimits.currentTables >= planLimits.maxTables - 1
+              ? "bg-orange-50 border-orange-200"
+              : "bg-green-50 border-green-200"
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`rounded-lg px-2 py-1 text-xs font-bold ${
+              planLimits.plan === "enterprise"
+                ? "bg-purple-100 text-purple-700"
+                : planLimits.plan === "pro"
+                  ? "bg-blue-100 text-blue-700"
+                  : "bg-gray-100 text-gray-700"
+            }`}>
+              {planLimits.planLabel}
+            </div>
+            <div>
+              <p className="text-sm font-medium">
+                {planLimits.currentTables} / {planLimits.maxTables === 999 ? "∞" : planLimits.maxTables} tables used
+              </p>
+              {!planLimits.canAddTable && (
+                <p className="text-xs text-amber-700 mt-0.5">
+                  Table limit reached. Upgrade your plan to add more tables.
+                </p>
+              )}
+            </div>
+          </div>
+          {!planLimits.canAddTable && planLimits.plan !== "enterprise" && (
+            <Badge variant="outline" className="text-xs cursor-pointer bg-orange-100 text-orange-700 border-orange-300">
+              Upgrade Plan →
+            </Badge>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Tables</h2>
@@ -133,6 +188,7 @@ export function TableManager({
             variant="outline"
             className="cursor-pointer"
             onClick={() => setShowBulkDialog(true)}
+            disabled={planLimits ? !planLimits.canAddTable : undefined}
           >
             <ListPlus className="mr-1.5 h-3.5 w-3.5" />
             Bulk Add
@@ -141,6 +197,7 @@ export function TableManager({
             size="sm"
             className="cursor-pointer"
             onClick={() => setShowNewTableDialog(true)}
+            disabled={planLimits ? !planLimits.canAddTable : undefined}
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             New Table
