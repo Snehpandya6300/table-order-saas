@@ -223,14 +223,14 @@ export function TableManager({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!planLimits.canAddTable && planLimits.plan !== "enterprise" && (
+            {!planLimits.canAddTable && (
               <Button
                 size="sm"
-                className="cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 text-xs h-8 px-3"
+                className="cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 text-xs h-8 px-3 shadow-md"
                 onClick={() => setShowUpgradeDialog(true)}
               >
                 <ArrowUpCircle className="mr-1.5 h-3.5 w-3.5" />
-                Update Plan
+                Contact Admin to Upgrade
               </Button>
             )}
             {planLimits.canAddTable && planLimits.plan === "free" && (

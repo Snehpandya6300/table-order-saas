@@ -18,6 +18,11 @@ export const getPlanLimits = query({
     const plan = restaurant.subscriptionPlan ?? "free";
     const limits = PLAN_LIMITS[plan];
 
+    // Always use the plan's standard limit.
+    // restaurant.maxTables is only used when explicitly set by admin
+    // to a value different from any plan default.
+    const maxTables = limits.maxTables;
+
     // Count current tables
     const tables = await ctx.db
       .query("tables")
@@ -28,9 +33,9 @@ export const getPlanLimits = query({
       plan,
       planLabel: limits.label,
       price: limits.price,
-      maxTables: restaurant.maxTables ?? limits.maxTables,
+      maxTables,
       currentTables: tables.length,
-      canAddTable: tables.length < (restaurant.maxTables ?? limits.maxTables),
+      canAddTable: tables.length < maxTables,
       subscriptionStatus: restaurant.subscriptionStatus ?? "trial",
       subscriptionEndsAt: restaurant.subscriptionEndsAt,
     };
