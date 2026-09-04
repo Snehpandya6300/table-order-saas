@@ -240,6 +240,7 @@ export default function Dashboard() {
           <TableManager
             restaurantId={restaurant._id}
             restaurantSlug={restaurant.slug}
+            restaurantName={restaurant.name}
           />
         )}
         {activeTab === "staff" && restaurant && (

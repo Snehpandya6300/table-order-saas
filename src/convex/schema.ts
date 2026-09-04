@@ -173,6 +173,24 @@ const schema = defineSchema({
     features: v.array(v.string()),
     isActive: v.boolean(),
   }).index("by_planId", ["id"]),
+
+  // Plan upgrade requests from restaurant owners
+  planRequests: defineTable({
+    restaurantId: v.id("restaurants"),
+    restaurantName: v.string(),
+    ownerName: v.string(),
+    ownerEmail: v.string(),
+    ownerPhone: v.optional(v.string()),
+    currentPlan: v.string(),
+    requestedPlan: v.string(),
+    message: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("contacted"),
+      v.literal("completed"),
+    ),
+    createdAt: v.number(),
+  }).index("by_status", ["status"]),
 });
 
 export default schema;

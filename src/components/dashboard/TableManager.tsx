@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,19 @@ import {
   XCircle,
   ListPlus,
   Layers,
+  ArrowUpCircle,
+  Send,
+  Loader2,
+  CheckCircle,
+  MessageSquare,
 } from "lucide-react";
 
 export function TableManager({
   restaurantId,
+  restaurantName,
 }: {
   restaurantId: Id<"restaurants">;
+  restaurantName: string;
   restaurantSlug: string;
 }) {
   const tables = useQuery(api.tables.getByRestaurant, { restaurantId });
@@ -42,6 +49,8 @@ export function TableManager({
   const toggleActive = useMutation(api.tables.toggleActive);
   const removeTable = useMutation(api.tables.remove);
   const regenerateQr = useMutation(api.tables.regenerateQr);
+  const submitPlanRequest = useMutation(api.planRequests.submit);
+  const sendPlanEmail = useAction(api.planRequests.sendEmail);
 
   const [showNewTableDialog, setShowNewTableDialog] = useState(false);
   const [newTableLabel, setNewTableLabel] = useState("");
@@ -55,6 +64,16 @@ export function TableManager({
   const [bulkStart, setBulkStart] = useState(1);
   const [bulkCount, setBulkCount] = useState(10);
   const [bulkCreating, setBulkCreating] = useState(false);
+
+  // Update Plan / Contact Admin state
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+  const [upgradeName, setUpgradeName] = useState("");
+  const [upgradeEmail, setUpgradeEmail] = useState("");
+  const [upgradePhone, setUpgradePhone] = useState("");
+  const [upgradePlan, setUpgradePlan] = useState("pro");
+  const [upgradeMessage, setUpgradeMessage] = useState("");
+  const [upgradeSending, setUpgradeSending] = useState(false);
+  const [upgradeSent, setUpgradeSent] = useState(false);
 
   if (!tables) {
     return (
@@ -131,6 +150,42 @@ export function TableManager({
     }
   };
 
+  const handleUpgradeSubmit = async () => {
+    if (!upgradeName.trim() || !upgradeEmail.trim()) return;
+    setUpgradeSending(true);
+    try {
+      // Store request in database
+      await submitPlanRequest({
+        restaurantId,
+        restaurantName,
+        ownerName: upgradeName.trim(),
+        ownerEmail: upgradeEmail.trim(),
+        ownerPhone: upgradePhone.trim() || undefined,
+        currentPlan: planLimits?.plan || "free",
+        requestedPlan: upgradePlan,
+        message: upgradeMessage.trim() || undefined,
+      });
+
+      // Send email to super admin
+      await sendPlanEmail({
+        restaurantName,
+        ownerName: upgradeName.trim(),
+        ownerEmail: upgradeEmail.trim(),
+        ownerPhone: upgradePhone.trim() || undefined,
+        currentPlan: planLimits?.plan || "free",
+        requestedPlan: upgradePlan,
+        message: upgradeMessage.trim() || undefined,
+      });
+
+      setUpgradeSent(true);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to send request. Please try again.");
+    } finally {
+      setUpgradeSending(false);
+    }
+  };
+
   const sortedTables = [...tables].sort((a, b) =>
     a.label.localeCompare(b.label),
   );
@@ -167,11 +222,29 @@ export function TableManager({
               )}
             </div>
           </div>
-          {!planLimits.canAddTable && planLimits.plan !== "enterprise" && (
-            <Badge variant="outline" className="text-xs cursor-pointer bg-orange-100 text-orange-700 border-orange-300">
-              Upgrade Plan →
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {!planLimits.canAddTable && planLimits.plan !== "enterprise" && (
+              <Button
+                size="sm"
+                className="cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 text-xs h-8 px-3"
+                onClick={() => setShowUpgradeDialog(true)}
+              >
+                <ArrowUpCircle className="mr-1.5 h-3.5 w-3.5" />
+                Update Plan
+              </Button>
+            )}
+            {planLimits.canAddTable && planLimits.plan === "free" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="cursor-pointer text-xs h-8 border-orange-200 text-orange-700 hover:bg-orange-50"
+                onClick={() => setShowUpgradeDialog(true)}
+              >
+                <ArrowUpCircle className="mr-1.5 h-3.5 w-3.5" />
+                Update Plan
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -408,6 +481,207 @@ export function TableManager({
               Create Table
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Plan / Contact Admin Dialog */}
+      <Dialog
+        open={showUpgradeDialog}
+        onOpenChange={(open) => {
+          setShowUpgradeDialog(open);
+          if (!open) {
+            setUpgradeSent(false);
+            setUpgradeName("");
+            setUpgradeEmail("");
+            setUpgradePhone("");
+            setUpgradeMessage("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpCircle className="h-5 w-5 text-orange-500" />
+              Update Your Plan
+            </DialogTitle>
+          </DialogHeader>
+
+          {upgradeSent ? (
+            <div className="py-8 text-center space-y-3">
+              <div className="mx-auto w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle className="h-7 w-7 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-green-700">
+                Request Sent!
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                Your upgrade request has been sent to our team. We'll contact
+                you shortly at <strong>{upgradeEmail}</strong> to discuss your
+                plan upgrade.
+              </p>
+              <Button
+                className="cursor-pointer mt-2"
+                variant="outline"
+                onClick={() => setShowUpgradeDialog(false)}
+              >
+                Close
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                {/* Current Plan Info */}
+                {planLimits && (
+                  <div className="rounded-lg bg-orange-50 border border-orange-200 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-orange-800">
+                        Current Plan
+                      </span>
+                      <Badge className="bg-orange-100 text-orange-700 border-orange-300">
+                        {planLimits.planLabel}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-orange-600 mt-1">
+                      {planLimits.currentTables} /{" "}
+                      {planLimits.maxTables === 999
+                        ? "∞"
+                        : planLimits.maxTables}{" "}
+                      tables used
+                    </p>
+                  </div>
+                )}
+
+                {/* Plan Options */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium">
+                    Select Plan
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      {
+                        id: "pro",
+                        name: "Pro",
+                        price: "$29/mo",
+                        desc: "10 tables, Staff, Analytics",
+                      },
+                      {
+                        id: "enterprise",
+                        name: "Enterprise",
+                        price: "$79/mo",
+                        desc: "Unlimited tables, API, Priority",
+                      },
+                    ].map((plan) => (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        className={`cursor-pointer rounded-lg border-2 p-3 text-left transition-all ${
+                          upgradePlan === plan.id
+                            ? "border-orange-500 bg-orange-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                        onClick={() => setUpgradePlan(plan.id)}
+                      >
+                        <div className="font-semibold text-sm">{plan.name}</div>
+                        <div className="text-orange-600 font-bold text-xs">
+                          {plan.price}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground mt-1">
+                          {plan.desc}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Contact Form */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    Your Name *
+                  </label>
+                  <Input
+                    placeholder="John Doe"
+                    value={upgradeName}
+                    onChange={(e) => setUpgradeName(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    Email Address *
+                  </label>
+                  <Input
+                    type="email"
+                    placeholder="you@restaurant.com"
+                    value={upgradeEmail}
+                    onChange={(e) => setUpgradeEmail(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    Phone Number
+                  </label>
+                  <Input
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={upgradePhone}
+                    onChange={(e) => setUpgradePhone(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    Message (optional)
+                  </label>
+                  <textarea
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[80px] resize-none"
+                    placeholder="Tell us about your needs, expected table count, any questions..."
+                    value={upgradeMessage}
+                    onChange={(e) => setUpgradeMessage(e.target.value)}
+                  />
+                </div>
+
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 flex items-start gap-2">
+                  <MessageSquare className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-blue-700">
+                    Our team will contact you within 24 hours to process your
+                    upgrade. No payment required until you confirm.
+                  </p>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  className="cursor-pointer"
+                  onClick={() => setShowUpgradeDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600"
+                  disabled={
+                    upgradeSending ||
+                    !upgradeName.trim() ||
+                    !upgradeEmail.trim()
+                  }
+                  onClick={handleUpgradeSubmit}
+                >
+                  {upgradeSending ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-1.5 h-3.5 w-3.5" />
+                      Send Request
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
