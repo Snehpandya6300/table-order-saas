@@ -10,6 +10,7 @@ import {
   XCircle,
   Phone,
   Clock,
+  X,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -39,21 +40,21 @@ export default function OrderStatus() {
 
   if (!orderId || order === undefined) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: "#EEF5F0" }}>
+        <div className="animate-pulse text-gray-400">Loading...</div>
       </div>
     );
   }
 
   if (!order) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="flex min-h-screen items-center justify-center px-6" style={{ backgroundColor: "#EEF5F0" }}>
         <div className="text-center max-w-sm">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-            <QrCode className="h-8 w-8 text-muted-foreground/50" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-green-50">
+            <QrCode className="h-8 w-8 text-green-300" />
           </div>
-          <h1 className="text-xl font-semibold mb-2">Order Not Found</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-xl font-semibold mb-2 text-gray-900">Order Not Found</h1>
+          <p className="text-sm text-gray-500">
             This order could not be found. Please check your order number.
           </p>
         </div>
@@ -65,36 +66,36 @@ export default function OrderStatus() {
   const isCancelled = order.status === "cancelled";
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/90 backdrop-blur-lg">
+    <div className="min-h-screen" style={{ backgroundColor: "#EEF5F0" }}>
+      <header className="sticky top-0 z-40 border-b border-green-200/50 bg-white/90 backdrop-blur-lg">
         <div className="mx-auto flex h-14 max-w-2xl items-center px-4">
-          <h1 className="text-sm font-semibold">Order Status</h1>
+          <h1 className="text-sm font-semibold text-gray-900">Order Status</h1>
         </div>
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-6 space-y-6">
-        <Card>
+        <Card className="border-green-100 bg-white shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-semibold">{order.tableLabel}</span>
-              <span className="text-sm font-bold tabular-nums">
+              <span className="text-sm font-semibold text-gray-900">{order.tableLabel}</span>
+              <span className="text-sm font-bold tabular-nums text-[#4A8C6F]">
                 ${order.totalAmount.toFixed(2)}
               </span>
             </div>
             {order.customerName && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-gray-500">
                 {order.customerName}
               </p>
             )}
             {order.customerPhone && (
               <div className="flex items-center gap-1 mt-1">
-                <Phone className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">
+                <Phone className="h-3 w-3 text-gray-400" />
+                <span className="text-xs text-gray-400">
                   {order.customerPhone}
                 </span>
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-gray-400 mt-1">
               {new Date(order.createdAt).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -106,7 +107,7 @@ export default function OrderStatus() {
         {isCancelled ? (
           <Card className="border-red-200 bg-red-50/50">
             <CardContent className="p-4 flex items-center gap-3">
-              <XCircle className="h-5 w-5 text-red-600 shrink-0" />
+              <X className="h-5 w-5 text-red-600 shrink-0" />
               <div>
                 <p className="text-sm font-semibold text-red-700">
                   Order Cancelled
@@ -130,17 +131,19 @@ export default function OrderStatus() {
                   key={step.key}
                   className={`flex items-center gap-3 rounded-xl border p-3 transition-all ${
                     isCurrent
-                      ? "border-foreground bg-card shadow-sm"
+                      ? "border-green-200 bg-green-50 shadow-sm"
                       : isCompleted
-                        ? "border-border/50 bg-muted/30"
-                        : "border-border/30 bg-transparent opacity-50"
+                        ? "border-green-100 bg-green-50/30"
+                        : "border-gray-100 bg-white opacity-50"
                   }`}
                 >
                   <div
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                      isCompleted
-                        ? "bg-foreground text-background"
-                        : "bg-muted text-muted-foreground"
+                      isCurrent
+                        ? "bg-[#4A8C6F] text-white"
+                        : isCompleted
+                          ? "bg-green-100 text-[#4A8C6F]"
+                          : "bg-gray-100 text-gray-400"
                     }`}
                   >
                     <StepIcon className="h-4 w-4" />
@@ -148,23 +151,21 @@ export default function OrderStatus() {
                   <div className="flex-1">
                     <p
                       className={`text-sm font-medium ${
-                        isCurrent
-                          ? "text-foreground"
-                          : isCompleted
-                            ? "text-foreground"
-                            : "text-muted-foreground"
+                        isCurrent || isCompleted
+                          ? "text-gray-900"
+                          : "text-gray-400"
                       }`}
                     >
                       {step.label}
                     </p>
                   </div>
                   {isCurrent && (
-                    <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                    <span className="text-[10px] font-medium text-[#4A8C6F] bg-green-100 rounded-full px-2 py-0.5">
                       Current
                     </span>
                   )}
                   {isCompleted && !isCurrent && (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-[#4A8C6F] shrink-0" />
                   )}
                 </div>
               );
@@ -172,29 +173,29 @@ export default function OrderStatus() {
           </div>
         )}
 
-        <Card>
+        <Card className="border-green-100 bg-white shadow-sm">
           <CardContent className="p-4">
-            <h3 className="text-sm font-semibold mb-3">Items Ordered</h3>
+            <h3 className="text-sm font-semibold mb-3 text-gray-900">Items Ordered</h3>
             <div className="space-y-2">
               {order.items.map((item, i) => (
                 <div key={i} className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">
+                  <span className="text-gray-500">
                     {item.quantity}× {item.name}
                     {item.note && (
-                      <span className="italic text-muted-foreground/70 ml-1">
+                      <span className="italic text-gray-400 ml-1">
                         — {item.note}
                       </span>
                     )}
                   </span>
-                  <span className="tabular-nums font-medium">
+                  <span className="tabular-nums font-medium text-gray-900">
                     ${(item.price * item.quantity).toFixed(2)}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="mt-3 pt-3 border-t flex justify-between text-sm font-semibold">
-              <span>Total</span>
-              <span className="tabular-nums">
+            <div className="mt-3 pt-3 border-t border-green-100 flex justify-between text-sm font-semibold">
+              <span className="text-gray-900">Total</span>
+              <span className="tabular-nums text-[#4A8C6F]">
                 ${order.totalAmount.toFixed(2)}
               </span>
             </div>

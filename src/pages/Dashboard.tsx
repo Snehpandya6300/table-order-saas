@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,6 @@ import { OrderManager } from "@/components/dashboard/OrderManager";
 import { StaffManager } from "@/components/dashboard/StaffManager";
 import {
   LogOut,
-  Utensils,
   Menu,
   LayoutGrid,
   ClipboardList,
@@ -32,12 +31,13 @@ import {
   Pencil,
   QrCode,
   Users,
+  LayoutDashboard,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
 type Tab = "orders" | "menu" | "tables" | "staff" | "settings";
 
-const ALL_TABS: { id: Tab; label: string; icon: typeof Utensils; minRole?: string }[] = [
+const ALL_TABS: { id: Tab; label: string; icon: typeof QrCode; minRole?: string }[] = [
   { id: "orders", label: "Orders", icon: ClipboardList },
   { id: "menu", label: "Menu", icon: Menu, minRole: "manager" },
   { id: "tables", label: "Tables", icon: LayoutGrid, minRole: "manager" },
@@ -59,7 +59,6 @@ export default function Dashboard() {
     user?.email ? { email: user.email } : "skip",
   );
 
-  // Merge: owned restaurants first, then staff restaurants (deduped)
   const restaurants = ownedRestaurants && staffRestaurants
     ? [
         ...ownedRestaurants,
@@ -69,7 +68,6 @@ export default function Dashboard() {
       ]
     : undefined;
   const restaurant = restaurants?.[0];
-  // Check if current user is owner or staff
   const isOwner = ownedRestaurants?.some((r) => r._id === restaurant?._id);
   const staffRole = staffRestaurants?.find((r) => r._id === restaurant?._id)?.staffRole as "owner" | "manager" | "staff" | undefined;
 
@@ -96,8 +94,8 @@ export default function Dashboard() {
 
   if (restaurants === undefined) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: "#EEF5F0" }}>
+        <div className="animate-pulse text-gray-400">Loading...</div>
       </div>
     );
   }
@@ -129,12 +127,12 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen" style={{ backgroundColor: "#EEF5F0" }}>
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-orange-100 bg-white/90 backdrop-blur-lg shadow-sm">
+      <header className="sticky top-0 z-40 border-b border-green-200/50 bg-white/95 backdrop-blur-lg shadow-sm">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 shadow-md shadow-orange-200">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#4A8C6F] shadow-md shadow-green-200">
               <QrCode className="h-4.5 w-4.5 text-white" />
             </div>
             <div>
@@ -148,7 +146,7 @@ export default function Dashboard() {
                   </Badge>
                 )}
               </div>
-              <p className="text-[11px] text-orange-500 font-medium mt-0.5">
+              <p className="text-[11px] text-[#4A8C6F] font-medium mt-0.5">
                 QR Table Order
               </p>
             </div>
@@ -156,7 +154,7 @@ export default function Dashboard() {
           <Button
             variant="ghost"
             size="sm"
-            className="cursor-pointer text-gray-500 hover:text-orange-500 hover:bg-orange-50"
+            className="cursor-pointer text-gray-500 hover:text-[#4A8C6F] hover:bg-green-50"
             onClick={handleSignOut}
           >
             <LogOut className="mr-1.5 h-3.5 w-3.5" />
@@ -169,15 +167,15 @@ export default function Dashboard() {
         {/* Stats */}
         {stats && (
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
-            <Card className="p-4 border-orange-100 bg-gradient-to-br from-white to-orange-50/30">
-              <div className="flex items-center gap-2 text-orange-500 mb-1">
+            <Card className="p-4 border-green-100 bg-white hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-2 text-[#4A8C6F] mb-1">
                 <ShoppingBag className="h-3.5 w-3.5" />
                 <span className="text-xs font-medium">Today&apos;s Orders</span>
               </div>
               <span className="text-2xl font-bold text-gray-900">{stats.todayOrders}</span>
             </Card>
-            <Card className="p-4 border-orange-100 bg-gradient-to-br from-white to-amber-50/30">
-              <div className="flex items-center gap-2 text-amber-500 mb-1">
+            <Card className="p-4 border-green-100 bg-white hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-2 text-[#5B9A7C] mb-1">
                 <TrendingUp className="h-3.5 w-3.5" />
                 <span className="text-xs font-medium">Today&apos;s Revenue</span>
               </div>
@@ -185,15 +183,15 @@ export default function Dashboard() {
                 ${stats.todayRevenue.toFixed(2)}
               </span>
             </Card>
-            <Card className="p-4 border-orange-100 bg-gradient-to-br from-white to-orange-50/30">
-              <div className="flex items-center gap-2 text-orange-400 mb-1">
+            <Card className="p-4 border-green-100 bg-white hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-2 text-amber-500 mb-1">
                 <Clock className="h-3.5 w-3.5" />
                 <span className="text-xs font-medium">Pending</span>
               </div>
               <span className="text-2xl font-bold text-gray-900">{stats.pendingOrders}</span>
             </Card>
-            <Card className="p-4 border-orange-100 bg-gradient-to-br from-white to-amber-50/30">
-              <div className="flex items-center gap-2 text-amber-400 mb-1">
+            <Card className="p-4 border-green-100 bg-white hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-2 text-[#6DAA8D] mb-1">
                 <ClipboardList className="h-3.5 w-3.5" />
                 <span className="text-xs font-medium">Total Orders</span>
               </div>
@@ -203,23 +201,19 @@ export default function Dashboard() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-6 border-b border-orange-100 overflow-x-auto">
+        <div className="flex gap-1 mb-6 border-b border-green-200/50 overflow-x-auto">
           {ALL_TABS.filter((tab) => {
-            // Staff can only see Orders
             if (!isOwner && !staffRole) return tab.id === "orders";
-            // Staff role: only Orders
             if (staffRole === "staff") return tab.id === "orders";
-            // Manager role: Orders, Menu, Tables
             if (staffRole === "manager") return !tab.minRole || tab.minRole === "manager";
-            // Owner: all tabs
             return true;
           }).map((tab) => (
             <button
               key={tab.id}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
                 activeTab === tab.id
-                  ? "border-orange-500 text-orange-600"
-                  : "border-transparent text-gray-400 hover:text-orange-400"
+                  ? "border-[#4A8C6F] text-[#4A8C6F]"
+                  : "border-transparent text-gray-400 hover:text-[#5B9A7C]"
               }`}
               onClick={() => setActiveTab(tab.id)}
             >
@@ -248,53 +242,51 @@ export default function Dashboard() {
         )}
         {activeTab === "settings" && restaurant && (
           <div className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg">Restaurant Details</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="cursor-pointer"
-                  onClick={openSettings}
-                >
-                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                  Edit
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <span className="text-xs text-muted-foreground">Name</span>
-                  <p className="text-sm font-medium">{restaurant.name}</p>
+            <Card className="border-green-100 bg-white">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-semibold text-gray-900">Restaurant Details</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer border-green-200 text-[#4A8C6F] hover:bg-green-50"
+                    onClick={openSettings}
+                  >
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    Edit
+                  </Button>
                 </div>
-                <div>
-                  <span className="text-xs text-muted-foreground">
-                    Description
-                  </span>
-                  <p className="text-sm font-medium">
-                    {restaurant.description || "—"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground">Phone</span>
-                  <p className="text-sm font-medium">
-                    {restaurant.phone || "—"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground">Address</span>
-                  <p className="text-sm font-medium">
-                    {restaurant.address || "—"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground">
-                    Subscription
-                  </span>
-                  <p className="text-sm font-medium">
-                    <Badge variant="outline" className="capitalize">
-                      {restaurant.subscriptionStatus ?? "trial"}
-                    </Badge>
-                  </p>
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-xs text-gray-400">Name</span>
+                    <p className="text-sm font-medium text-gray-800">{restaurant.name}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-400">Description</span>
+                    <p className="text-sm font-medium text-gray-800">
+                      {restaurant.description || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-400">Phone</span>
+                    <p className="text-sm font-medium text-gray-800">
+                      {restaurant.phone || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-400">Address</span>
+                    <p className="text-sm font-medium text-gray-800">
+                      {restaurant.address || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-400">Subscription</span>
+                    <p className="text-sm font-medium">
+                      <Badge variant="outline" className="capitalize bg-green-50 text-[#4A8C6F] border-green-200">
+                        {restaurant.subscriptionStatus ?? "trial"}
+                      </Badge>
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -363,7 +355,7 @@ export default function Dashboard() {
               Cancel
             </Button>
             <Button
-              className="cursor-pointer"
+              className="cursor-pointer bg-[#4A8C6F] hover:bg-[#3D7A5F] text-white"
               onClick={handleSaveSettings}
               disabled={!settingsForm.name.trim()}
             >

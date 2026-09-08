@@ -31,6 +31,7 @@ import {
   Loader2,
   CheckCircle,
   MessageSquare,
+  QrCode,
 } from "lucide-react";
 
 export function TableManager({
@@ -77,7 +78,7 @@ export function TableManager({
 
   if (!tables) {
     return (
-      <div className="flex items-center justify-center py-20 text-muted-foreground">
+      <div className="flex items-center justify-center py-20 text-gray-400">
         Loading tables...
       </div>
     );
@@ -154,7 +155,6 @@ export function TableManager({
     if (!upgradeName.trim() || !upgradeEmail.trim()) return;
     setUpgradeSending(true);
     try {
-      // Store request in database
       await submitPlanRequest({
         restaurantId,
         restaurantName,
@@ -166,7 +166,6 @@ export function TableManager({
         message: upgradeMessage.trim() || undefined,
       });
 
-      // Send email to super admin
       await sendPlanEmail({
         restaurantName,
         ownerName: upgradeName.trim(),
@@ -226,7 +225,7 @@ export function TableManager({
             {!planLimits.canAddTable && (
               <Button
                 size="sm"
-                className="cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 text-xs h-8 px-3 shadow-md"
+                className="cursor-pointer bg-[#4A8C6F] text-white hover:bg-[#3D7A5F] text-xs h-8 px-3 shadow-md"
                 onClick={() => setShowUpgradeDialog(true)}
               >
                 <ArrowUpCircle className="mr-1.5 h-3.5 w-3.5" />
@@ -237,7 +236,7 @@ export function TableManager({
               <Button
                 size="sm"
                 variant="outline"
-                className="cursor-pointer text-xs h-8 border-orange-200 text-orange-700 hover:bg-orange-50"
+                className="cursor-pointer text-xs h-8 border-green-200 text-[#4A8C6F] hover:bg-green-50"
                 onClick={() => setShowUpgradeDialog(true)}
               >
                 <ArrowUpCircle className="mr-1.5 h-3.5 w-3.5" />
@@ -248,18 +247,17 @@ export function TableManager({
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Tables</h2>
-          <p className="text-sm text-muted-foreground">
-            Create tables and generate QR codes for table-based ordering.
-          </p>
-        </div>
-        <div className="flex gap-2">
+      {/* Header */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">Table Overview</h2>
+        <p className="text-sm text-gray-400">
+          Table Management
+        </p>
+        <div className="flex gap-2 mt-3">
           <Button
             size="sm"
             variant="outline"
-            className="cursor-pointer"
+            className="cursor-pointer border-green-200 text-[#4A8C6F] hover:bg-green-50"
             onClick={() => setShowBulkDialog(true)}
             disabled={planLimits ? !planLimits.canAddTable : undefined}
           >
@@ -268,7 +266,7 @@ export function TableManager({
           </Button>
           <Button
             size="sm"
-            className="cursor-pointer"
+            className="cursor-pointer bg-[#4A8C6F] text-white hover:bg-[#3D7A5F]"
             onClick={() => setShowNewTableDialog(true)}
             disabled={planLimits ? !planLimits.canAddTable : undefined}
           >
@@ -278,18 +276,19 @@ export function TableManager({
         </div>
       </div>
 
+      {/* Tables Grid */}
       {sortedTables.length === 0 ? (
-        <Card>
+        <Card className="border-green-100 bg-white">
           <CardContent className="py-12 text-center">
-            <LayoutGrid className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
+            <LayoutGrid className="mx-auto mb-3 h-8 w-8 text-gray-300" />
+            <p className="text-sm text-gray-400">
               No tables yet. Create your first table to start taking orders.
             </p>
             <div className="mt-4 flex justify-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="cursor-pointer"
+                className="cursor-pointer border-green-200 text-[#4A8C6F] hover:bg-green-50"
                 onClick={() => setShowBulkDialog(true)}
               >
                 <ListPlus className="mr-1.5 h-3.5 w-3.5" />
@@ -297,7 +296,7 @@ export function TableManager({
               </Button>
               <Button
                 size="sm"
-                className="cursor-pointer"
+                className="cursor-pointer bg-[#4A8C6F] text-white hover:bg-[#3D7A5F]"
                 onClick={() => setShowNewTableDialog(true)}
               >
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -307,63 +306,99 @@ export function TableManager({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {sortedTables.map((table) => (
-            <Card
+            <div
               key={table._id}
-              className={`overflow-hidden ${!table.isActive ? "opacity-60" : ""}`}
+              className={`group rounded-2xl bg-white border overflow-hidden transition-all duration-200 ${
+                table.isActive
+                  ? "border-green-200 hover:shadow-lg hover:shadow-green-100 hover:border-green-300"
+                  : "border-gray-200 opacity-60"
+              }`}
             >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    {editingTable === table._id ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          className="h-7 w-24 text-sm"
-                          value={editLabel}
-                          onChange={(e) => setEditLabel(e.target.value)}
-                          onKeyDown={(e) =>
-                            e.key === "Enter" && handleUpdateTable(table._id)
-                          }
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="cursor-pointer h-7 w-7 p-0"
-                          onClick={() => handleUpdateTable(table._id)}
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="font-bold text-lg">{table.label}</span>
-                    )}
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] ${
-                        table.isActive
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-gray-50 text-gray-600 border-gray-200"
-                      }`}
+              {/* Table Card Header */}
+              <div className={`px-4 py-3 flex items-center justify-between ${
+                table.isActive
+                  ? "bg-[#4A8C6F]"
+                  : "bg-gray-300"
+              }`}>
+                {editingTable === table._id ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      className="h-7 w-24 text-sm bg-white/90 border-green-300"
+                      value={editLabel}
+                      onChange={(e) => setEditLabel(e.target.value)}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleUpdateTable(table._id)
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="cursor-pointer h-7 w-7 p-0 text-white hover:bg-white/20"
+                      onClick={() => handleUpdateTable(table._id)}
                     >
-                      {table.isActive ? "Active" : "Disabled"}
-                    </Badge>
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
-                </div>
+                ) : (
+                  <span className="font-bold text-sm text-white">{table.label}</span>
+                )}
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] ${
+                    table.isActive
+                      ? "bg-green-50 text-[#4A8C6F] border-green-300"
+                      : "bg-gray-50 text-gray-600 border-gray-200"
+                  }`}
+                >
+                  {table.isActive ? "Active" : "Off"}
+                </Badge>
+              </div>
 
-                <div className="flex justify-center py-2">
+              {/* Mini Floor Plan */}
+              <div className="p-4 flex items-center justify-center">
+                <div className="relative">
+                  {/* Table (center rectangle) */}
+                  <div className={`w-16 h-10 rounded-lg border-2 flex items-center justify-center ${
+                    table.isActive
+                      ? "border-[#4A8C6F] bg-green-50"
+                      : "border-gray-300 bg-gray-50"
+                  }`}>
+                    <QrCode className={`h-5 w-5 ${
+                      table.isActive ? "text-[#4A8C6F]" : "text-gray-300"
+                    }`} />
+                  </div>
+                  {/* Chairs around table */}
+                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
+                  <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
+                  <div className="absolute top-1/2 -left-2.5 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
+                  <div className="absolute top-1/2 -right-2.5 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
+                  <div className="absolute -top-2.5 -left-1 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
+                  <div className="absolute -top-2.5 -right-1 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
+                  <div className="absolute -bottom-2.5 -left-1 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
+                  <div className="absolute -bottom-2.5 -right-1 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
+                </div>
+              </div>
+
+              {/* QR Code */}
+              <div className="px-4 pb-3">
+                <div className="flex justify-center py-2 bg-gray-50 rounded-xl">
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(getQrUrl(table.qrToken))}`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(getQrUrl(table.qrToken))}`}
                     alt={`QR for ${table.label}`}
                     className="rounded-lg"
                   />
                 </div>
+              </div>
 
-                <div className="flex gap-1.5 mt-2">
+              {/* Action Buttons */}
+              <div className="px-3 pb-3 space-y-1.5">
+                <div className="flex gap-1.5">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="cursor-pointer flex-1 text-[11px] h-8"
+                    className="cursor-pointer flex-1 text-[11px] h-7 border-green-200 text-[#4A8C6F] hover:bg-green-50"
                     onClick={() => handleCopyLink(table.qrToken)}
                   >
                     {copiedId === table.qrToken ? (
@@ -381,21 +416,18 @@ export function TableManager({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="cursor-pointer flex-1 text-[11px] h-8"
-                    onClick={() =>
-                      handleDownloadQr(table.qrToken, table.label)
-                    }
+                    className="cursor-pointer flex-1 text-[11px] h-7 border-green-200 text-[#4A8C6F] hover:bg-green-50"
+                    onClick={() => handleDownloadQr(table.qrToken, table.label)}
                   >
                     <Download className="mr-1 h-3 w-3" />
                     QR
                   </Button>
                 </div>
-
-                <div className="flex gap-1.5 mt-2">
+                <div className="flex gap-1 justify-center">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="cursor-pointer h-8 w-8 p-0"
+                    className="cursor-pointer h-7 w-7 p-0 hover:bg-green-50 hover:text-[#4A8C6F]"
                     onClick={() => {
                       setEditingTable(table._id);
                       setEditLabel(table.label);
@@ -407,7 +439,7 @@ export function TableManager({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="cursor-pointer h-8 w-8 p-0"
+                    className="cursor-pointer h-7 w-7 p-0 hover:bg-green-50 hover:text-[#4A8C6F]"
                     onClick={() => regenerateQr({ id: table._id })}
                     title="Regenerate QR"
                   >
@@ -416,28 +448,28 @@ export function TableManager({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="cursor-pointer h-8 w-8 p-0"
+                    className="cursor-pointer h-7 w-7 p-0 hover:bg-amber-50 hover:text-amber-600"
                     onClick={() => toggleActive({ id: table._id })}
                     title={table.isActive ? "Disable" : "Enable"}
                   >
                     {table.isActive ? (
-                      <XCircle className="h-3.5 w-3.5 text-amber-600" />
+                      <XCircle className="h-3.5 w-3.5" />
                     ) : (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      <CheckCircle2 className="h-3.5 w-3.5" />
                     )}
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="cursor-pointer h-8 w-8 p-0 text-destructive"
+                    className="cursor-pointer h-7 w-7 p-0 text-gray-400 hover:bg-red-50 hover:text-red-600"
                     onClick={() => removeTable({ id: table._id })}
                     title="Delete table"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -460,7 +492,7 @@ export function TableManager({
                 onKeyDown={(e) => e.key === "Enter" && handleCreateTable()}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-gray-400">
               A unique QR code will be generated for this table. Customers can
               scan it to view the menu and place orders.
             </p>
@@ -474,7 +506,7 @@ export function TableManager({
               Cancel
             </Button>
             <Button
-              className="cursor-pointer"
+              className="cursor-pointer bg-[#4A8C6F] text-white hover:bg-[#3D7A5F]"
               onClick={handleCreateTable}
               disabled={!newTableLabel.trim()}
             >
@@ -501,7 +533,7 @@ export function TableManager({
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ArrowUpCircle className="h-5 w-5 text-orange-500" />
+              <ArrowUpCircle className="h-5 w-5 text-[#4A8C6F]" />
               Update Your Plan
             </DialogTitle>
           </DialogHeader>
@@ -509,18 +541,18 @@ export function TableManager({
           {upgradeSent ? (
             <div className="py-8 text-center space-y-3">
               <div className="mx-auto w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle className="h-7 w-7 text-green-600" />
+                <CheckCircle className="h-7 w-7 text-[#4A8C6F]" />
               </div>
-              <h3 className="text-lg font-semibold text-green-700">
+              <h3 className="text-lg font-semibold text-[#4A8C6F]">
                 Request Sent!
               </h3>
-              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                Your upgrade request has been sent to our team. We'll contact
+              <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                Your upgrade request has been sent to our team. We&apos;ll contact
                 you shortly at <strong>{upgradeEmail}</strong> to discuss your
                 plan upgrade.
               </p>
               <Button
-                className="cursor-pointer mt-2"
+                className="cursor-pointer mt-2 border-green-200 text-[#4A8C6F] hover:bg-green-50"
                 variant="outline"
                 onClick={() => setShowUpgradeDialog(false)}
               >
@@ -532,16 +564,16 @@ export function TableManager({
               <div className="space-y-4">
                 {/* Current Plan Info */}
                 {planLimits && (
-                  <div className="rounded-lg bg-orange-50 border border-orange-200 p-3">
+                  <div className="rounded-lg bg-green-50 border border-green-200 p-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-orange-800">
+                      <span className="text-sm text-[#4A8C6F]">
                         Current Plan
                       </span>
-                      <Badge className="bg-orange-100 text-orange-700 border-orange-300">
+                      <Badge className="bg-green-100 text-[#4A8C6F] border-green-300">
                         {planLimits.planLabel}
                       </Badge>
                     </div>
-                    <p className="text-xs text-orange-600 mt-1">
+                    <p className="text-xs text-green-700 mt-1">
                       {planLimits.currentTables} /{" "}
                       {planLimits.maxTables === 999
                         ? "∞"
@@ -576,16 +608,16 @@ export function TableManager({
                         type="button"
                         className={`cursor-pointer rounded-lg border-2 p-3 text-left transition-all ${
                           upgradePlan === plan.id
-                            ? "border-orange-500 bg-orange-50"
+                            ? "border-[#4A8C6F] bg-green-50"
                             : "border-gray-200 hover:border-gray-300"
                         }`}
                         onClick={() => setUpgradePlan(plan.id)}
                       >
                         <div className="font-semibold text-sm">{plan.name}</div>
-                        <div className="text-orange-600 font-bold text-xs">
+                        <div className="text-[#4A8C6F] font-bold text-xs">
                           {plan.price}
                         </div>
-                        <div className="text-[11px] text-muted-foreground mt-1">
+                        <div className="text-[11px] text-gray-500 mt-1">
                           {plan.desc}
                         </div>
                       </button>
@@ -659,7 +691,7 @@ export function TableManager({
                   Cancel
                 </Button>
                 <Button
-                  className="cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600"
+                  className="cursor-pointer bg-[#4A8C6F] text-white hover:bg-[#3D7A5F]"
                   disabled={
                     upgradeSending ||
                     !upgradeName.trim() ||
@@ -690,7 +722,7 @@ export function TableManager({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Layers className="h-5 w-5" />
+              <Layers className="h-5 w-5 text-[#4A8C6F]" />
               Bulk Add Tables
             </DialogTitle>
           </DialogHeader>
@@ -713,7 +745,7 @@ export function TableManager({
                     key={preset.label}
                     variant="outline"
                     size="sm"
-                    className="cursor-pointer text-xs h-7"
+                    className="cursor-pointer text-xs h-7 border-green-200 text-[#4A8C6F] hover:bg-green-50"
                     onClick={() => {
                       setBulkPrefix(preset.prefix);
                       setBulkStart(preset.start);
@@ -764,25 +796,25 @@ export function TableManager({
             </div>
 
             {/* Preview */}
-            <div className="rounded-lg bg-muted/50 p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">
+            <div className="rounded-lg bg-green-50 border border-green-100 p-3">
+              <p className="text-xs font-medium text-gray-500 mb-2">
                 Preview (first 5):
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {Array.from({ length: Math.min(bulkCount, 5) }, (_, i) => (
-                  <Badge key={i} variant="secondary" className="text-xs">
+                  <Badge key={i} variant="secondary" className="text-xs bg-green-100 text-[#4A8C6F] border-green-200">
                     {bulkPrefix} {bulkStart + i}
                   </Badge>
                 ))}
                 {bulkCount > 5 && (
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge variant="secondary" className="text-xs bg-green-100 text-[#4A8C6F] border-green-200">
                     +{bulkCount - 5} more
                   </Badge>
                 )}
               </div>
             </div>
 
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-gray-400">
               Each table will get a unique QR code. You can manage, rename, or
               disable individual tables after creation.
             </p>
@@ -796,7 +828,7 @@ export function TableManager({
               Cancel
             </Button>
             <Button
-              className="cursor-pointer"
+              className="cursor-pointer bg-[#4A8C6F] text-white hover:bg-[#3D7A5F]"
               onClick={handleBulkCreate}
               disabled={bulkCreating || bulkCount < 1}
             >
