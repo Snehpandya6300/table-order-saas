@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,14 @@ import {
   QrCode,
   Users,
   LayoutDashboard,
+  AlertTriangle,
+  Mail,
+  Phone,
+  Send,
+  Loader2,
+  CheckCircle,
+  MessageSquare,
+  Ban,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
@@ -87,6 +95,18 @@ export default function Dashboard() {
     address: "",
   });
 
+  // Suspended account contact form
+  const submitPlanRequest = useMutation(api.planRequests.submit);
+  const sendPlanEmail = useAction(api.planRequests.sendEmail);
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactSending, setContactSending] = useState(false);
+  const [contactSent, setContactSent] = useState(false);
+
+  const isSuspended = restaurant?.subscriptionStatus === "suspended";
+
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
@@ -124,6 +144,38 @@ export default function Dashboard() {
       address: settingsForm.address.trim() || undefined,
     });
     setShowSettingsDialog(false);
+  };
+
+  const handleContactSubmit = async () => {
+    if (!restaurant || !contactName.trim() || !contactEmail.trim()) return;
+    setContactSending(true);
+    try {
+      await submitPlanRequest({
+        restaurantId: restaurant._id,
+        restaurantName: restaurant.name,
+        ownerName: contactName.trim(),
+        ownerEmail: contactEmail.trim(),
+        ownerPhone: contactPhone.trim() || undefined,
+        currentPlan: restaurant.subscriptionPlan || "free",
+        requestedPlan: "pro",
+        message: contactMessage.trim() || "Account suspended - requesting reactivation",
+      });
+      await sendPlanEmail({
+        restaurantName: restaurant.name,
+        ownerName: contactName.trim(),
+        ownerEmail: contactEmail.trim(),
+        ownerPhone: contactPhone.trim() || undefined,
+        currentPlan: restaurant.subscriptionPlan || "free",
+        requestedPlan: "pro",
+        message: contactMessage.trim() || "Account suspended - requesting reactivation",
+      });
+      setContactSent(true);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to send request. Please try again.");
+    } finally {
+      setContactSending(false);
+    }
   };
 
   return (
@@ -164,6 +216,137 @@ export default function Dashboard() {
       </header>
 
       <div className="mx-auto max-w-6xl px-6 py-6">
+        {/* Suspended Account Block */}
+        {isSuspended && (
+          <div className="max-w-lg mx-auto">
+            <Card className="border-red-200 bg-white shadow-lg overflow-hidden">
+              {/* Red Header */}
+              <div className="bg-red-500 px-6 py-5 text-center">
+                <div className="mx-auto w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-3">
+                  <Ban className="h-8 w-8 text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-white">Account Suspended</h2>
+                <p className="text-sm text-white/80 mt-1">
+                  Your subscription has been suspended. Contact admin to reactivate.
+                </p>
+              </div>
+
+              <div className="p-6">
+                {contactSent ? (
+                  <div className="py-8 text-center space-y-3">
+                    <div className="mx-auto w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
+                      <CheckCircle className="h-7 w-7 text-[#4A8C6F]" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-[#4A8C6F]">
+                      Request Sent!
+                    </h3>
+                    <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                      Your request has been sent to our team. We&apos;ll contact you at <strong>{contactEmail}</strong> to help reactivate your account.
+                    </p>
+                    <Button
+                      className="cursor-pointer mt-2 bg-[#4A8C6F] text-white hover:bg-[#3D7A5F]"
+                      onClick={() => {
+                        setContactSent(false);
+                        setContactName("");
+                        setContactEmail("");
+                        setContactPhone("");
+                        setContactMessage("");
+                      }}
+                    >
+                      Send Another Request
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                      Please fill in the form below and our team will contact you within 24 hours to reactivate your account.
+                    </p>
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                        Your Name <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        placeholder="Enter your name"
+                        value={contactName}
+                        onChange={(e) => setContactName(e.target.value)}
+                        className="border-red-200 focus:border-[#4A8C6F]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                        Email Address <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="email"
+                        placeholder="you@restaurant.com"
+                        value={contactEmail}
+                        onChange={(e) => setContactEmail(e.target.value)}
+                        className="border-red-200 focus:border-[#4A8C6F]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                        Phone Number
+                      </label>
+                      <Input
+                        type="tel"
+                        placeholder="+91 98765 43210"
+                        value={contactPhone}
+                        onChange={(e) => setContactPhone(e.target.value)}
+                        className="border-red-200 focus:border-[#4A8C6F]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                        Message (optional)
+                      </label>
+                      <Textarea
+                        placeholder="Tell us about your issue or request..."
+                        value={contactMessage}
+                        onChange={(e) => setContactMessage(e.target.value)}
+                        rows={3}
+                        className="border-red-200 focus:border-[#4A8C6F]"
+                      />
+                    </div>
+
+                    <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 flex items-start gap-2">
+                      <MessageSquare className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                      <p className="text-xs text-blue-700">
+                        Our team will contact you within 24 hours to process your request.
+                      </p>
+                    </div>
+
+                    <Button
+                      className="cursor-pointer w-full h-11 bg-[#4A8C6F] text-white hover:bg-[#3D7A5F] font-semibold"
+                      disabled={contactSending || !contactName.trim() || !contactEmail.trim()}
+                      onClick={handleContactSubmit}
+                    >
+                      {contactSending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="mr-2 h-4 w-4" />
+                          Contact Admin
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Normal Dashboard Content (hidden when suspended) */}
+        {!isSuspended && (
+          <>
         {/* Stats */}
         {stats && (
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
@@ -291,6 +474,8 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
+        )}
+          </>
         )}
       </div>
 
