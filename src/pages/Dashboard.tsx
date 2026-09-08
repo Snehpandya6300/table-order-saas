@@ -40,6 +40,9 @@ import {
   CheckCircle,
   MessageSquare,
   Ban,
+  Camera,
+  X,
+  ImagePlus,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
@@ -79,6 +82,7 @@ export default function Dashboard() {
   const isOwner = ownedRestaurants?.some((r) => r._id === restaurant?._id);
   const staffRole = staffRestaurants?.find((r) => r._id === restaurant?._id)?.staffRole as "owner" | "manager" | "staff" | undefined;
 
+  const generateUploadUrl = useMutation(api.restaurants.generateUploadUrl);
   const updateRestaurant = useMutation(api.restaurants.update);
   const stats = useQuery(
     api.orders.getStats,
@@ -105,7 +109,45 @@ export default function Dashboard() {
   const [contactSending, setContactSending] = useState(false);
   const [contactSent, setContactSent] = useState(false);
 
+  // Logo upload
+  const [logoUploading, setLogoUploading] = useState(false);
+
   const isSuspended = restaurant?.subscriptionStatus === "suspended";
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !restaurant) return;
+    setLogoUploading(true);
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      const { storageId } = await response.json();
+      // Build the Convex file URL from storageId
+      const convexUrl = import.meta.env.VITE_CONVEX_URL as string;
+      const fileUrl = `${convexUrl}/api/storage/${storageId}`;
+      await updateRestaurant({
+        id: restaurant._id,
+        logoUrl: fileUrl,
+      });
+    } catch (err) {
+      console.error("Logo upload failed:", err);
+      alert("Failed to upload logo. Please try again.");
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!restaurant) return;
+    await updateRestaurant({
+      id: restaurant._id,
+      logoUrl: undefined,
+    });
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -184,9 +226,17 @@ export default function Dashboard() {
       <header className="sticky top-0 z-40 border-b border-green-200/50 bg-white/95 backdrop-blur-lg shadow-sm">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#4A8C6F] shadow-md shadow-green-200">
-              <QrCode className="h-4.5 w-4.5 text-white" />
-            </div>
+            {restaurant?.logoUrl ? (
+              <img
+                src={restaurant.logoUrl}
+                alt="Restaurant Logo"
+                className="h-9 w-9 rounded-xl object-cover shadow-md shadow-green-200 border border-green-100"
+              />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#4A8C6F] shadow-md shadow-green-200">
+                <QrCode className="h-4.5 w-4.5 text-white" />
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-sm font-bold leading-none text-gray-900">
@@ -425,6 +475,77 @@ export default function Dashboard() {
         )}
         {activeTab === "settings" && restaurant && (
           <div className="space-y-4">
+            {/* Logo Upload */}
+            <Card className="border-green-100 bg-white">
+              <CardContent className="p-6">
+                <h3 className="text-base font-semibold text-gray-900 mb-4">Restaurant Logo</h3>
+                <div className="flex items-start gap-6">
+                  {/* Current Logo Preview */}
+                  <div className="relative group">
+                    {restaurant.logoUrl ? (
+                      <img
+                        src={restaurant.logoUrl}
+                        alt="Restaurant Logo"
+                        className="h-24 w-24 rounded-2xl object-cover border-2 border-green-200 shadow-md"
+                      />
+                    ) : (
+                      <div className="h-24 w-24 rounded-2xl border-2 border-dashed border-green-300 bg-green-50 flex flex-col items-center justify-center gap-1">
+                        <ImagePlus className="h-8 w-8 text-green-400" />
+                        <span className="text-[10px] text-green-500 font-medium">No logo</span>
+                      </div>
+                    )}
+                    {restaurant.logoUrl && (
+                      <button
+                        onClick={handleRemoveLogo}
+                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md hover:bg-red-600 transition-colors cursor-pointer"
+                        title="Remove logo"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Upload Controls */}
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm text-gray-600">
+                      Upload your restaurant logo. It will appear in the dashboard header and on the customer menu.
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Recommended: Square image, at least 200×200px. JPG, PNG, or WebP.
+                    </p>
+                    <div className="flex gap-2">
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleLogoUpload}
+                          disabled={logoUploading}
+                        />
+                        <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#4A8C6F] text-white text-sm font-medium hover:bg-[#3D7A5F] transition-colors shadow-sm">
+                          {logoUploading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Camera className="h-4 w-4" />
+                          )}
+                          {logoUploading ? "Uploading..." : restaurant.logoUrl ? "Change Logo" : "Upload Logo"}
+                        </span>
+                      </label>
+                      {restaurant.logoUrl && (
+                        <button
+                          onClick={handleRemoveLogo}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors cursor-pointer"
+                        >
+                          <X className="h-4 w-4" />
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border-green-100 bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
