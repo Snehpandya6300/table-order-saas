@@ -250,9 +250,6 @@ export function TableManager({
       {/* Header */}
       <div>
         <h2 className="text-lg font-semibold text-gray-900">Table Overview</h2>
-        <p className="text-sm text-gray-400">
-          Table Management
-        </p>
         <div className="flex gap-2 mt-3">
           <Button
             size="sm"
