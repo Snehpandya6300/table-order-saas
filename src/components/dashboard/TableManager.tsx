@@ -31,7 +31,6 @@ import {
   Loader2,
   CheckCircle,
   MessageSquare,
-  QrCode,
 } from "lucide-react";
 
 export function TableManager({
@@ -353,33 +352,8 @@ export function TableManager({
                 </Badge>
               </div>
 
-              {/* Mini Floor Plan */}
-              <div className="p-4 flex items-center justify-center">
-                <div className="relative">
-                  {/* Table (center rectangle) */}
-                  <div className={`w-16 h-10 rounded-lg border-2 flex items-center justify-center ${
-                    table.isActive
-                      ? "border-[#4A8C6F] bg-green-50"
-                      : "border-gray-300 bg-gray-50"
-                  }`}>
-                    <QrCode className={`h-5 w-5 ${
-                      table.isActive ? "text-[#4A8C6F]" : "text-gray-300"
-                    }`} />
-                  </div>
-                  {/* Chairs around table */}
-                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
-                  <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
-                  <div className="absolute top-1/2 -left-2.5 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
-                  <div className="absolute top-1/2 -right-2.5 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
-                  <div className="absolute -top-2.5 -left-1 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
-                  <div className="absolute -top-2.5 -right-1 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
-                  <div className="absolute -bottom-2.5 -left-1 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
-                  <div className="absolute -bottom-2.5 -right-1 w-2.5 h-2.5 rounded-full bg-[#4A8C6F]" />
-                </div>
-              </div>
-
               {/* QR Code */}
-              <div className="px-4 pb-3">
+              <div className="px-4 pt-4 pb-3">
                 <div className="flex justify-center py-2 bg-gray-50 rounded-xl">
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(getQrUrl(table.qrToken))}`}
