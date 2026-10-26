@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useParams } from "react-router";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,9 @@ import {
   CupSoda,
   Package,
   Wine,
+  ShieldCheck,
+  BadgeCheck,
+  Smartphone,
 } from "lucide-react";
 
 interface CartItem {
@@ -152,6 +155,14 @@ export default function CustomerMenu() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
+  const [otpId, setOtpId] = useState<string | null>(null);
+  const [otpInput, setOtpInput] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("menu");
@@ -185,6 +196,14 @@ export default function CustomerMenu() {
       : "skip",
   );
   const createOrder = useMutation(api.orders.create);
+  const sendOtp = useAction(api.otp.sendOtp);
+  const verifyOtp = useMutation(api.otp.verify);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const t = setTimeout(() => setOtpCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpCooldown]);
 
   const [storedOrderIds, setStoredOrderIds] = useState<string[]>([]);
 
@@ -294,11 +313,75 @@ export default function CustomerMenu() {
     setCart((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const handleSendOtp = async () => {
+    if (!tableData) return;
+    const phone = customerPhone.replace(/\s/g, "");
+    if (phone.length < 8) {
+      setPhoneError("Please enter a valid mobile number.");
+      return;
+    }
+    setPhoneError("");
+    setOtpError("");
+    setIsSendingOtp(true);
+    try {
+      const res = await sendOtp({
+        restaurantId: tableData.restaurantId,
+        phone,
+      });
+      setOtpId(res.otpId);
+      setDevOtp(res.devOtp ?? null);
+      setOtpInput("");
+      setOtpVerified(false);
+      setOtpCooldown(30);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to send code. Try again.";
+      setPhoneError(msg);
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpId) return;
+    const code = otpInput.replace(/\s/g, "");
+    if (code.length !== 6) {
+      setOtpError("Enter the 6-digit code.");
+      return;
+    }
+    setOtpError("");
+    setIsVerifyingOtp(true);
+    try {
+      const res = await verifyOtp({
+        otpId: otpId as Id<"phoneOtps">,
+        code,
+      });
+      if (res.verified) {
+        setOtpVerified(true);
+        setDevOtp(null);
+        setOtpError("");
+      } else {
+        setOtpError(res.error ?? "Invalid code. Please try again.");
+        setOtpInput("");
+      }
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Verification failed. Try again.";
+      setOtpError(msg);
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
   const handleOrder = async () => {
     if (!tableData || !restaurant || cart.length === 0) return;
     const phone = customerPhone.replace(/\s/g, "");
-    if (!phone || phone.length < 6) {
+    if (!phone || phone.length < 8) {
       setPhoneError("Please enter a valid mobile number.");
+      return;
+    }
+    if (!otpVerified) {
+      setPhoneError("Please verify your mobile number with the OTP first.");
       return;
     }
     setPhoneError("");
@@ -1019,6 +1102,12 @@ export default function CustomerMenu() {
                           onChange={(e) => {
                             setCustomerPhone(e.target.value);
                             if (phoneError) setPhoneError("");
+                            if (otpVerified || otpId) {
+                              setOtpVerified(false);
+                              setOtpId(null);
+                              setOtpInput("");
+                              setDevOtp(null);
+                            }
                           }}
                           required
                         />
@@ -1032,6 +1121,94 @@ export default function CustomerMenu() {
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
                       />
+
+                      {/* OTP Verification */}
+                      {!otpVerified ? (
+                        <div className="rounded-lg border border-green-100 bg-green-50/40 p-2.5 space-y-2">
+                          <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#4A8C6F]">
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            Verify your mobile number
+                          </div>
+                          {!otpId ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="cursor-pointer w-full h-8 border-green-200 text-[#4A8C6F] hover:bg-green-50 text-xs"
+                              onClick={handleSendOtp}
+                              disabled={isSendingOtp || otpCooldown > 0}
+                            >
+                              {isSendingOtp
+                                ? "Sending..."
+                                : otpCooldown > 0
+                                  ? `Resend in ${otpCooldown}s`
+                                  : "Send OTP"}
+                            </Button>
+                          ) : (
+                            <>
+                              <Input
+                                inputMode="numeric"
+                                maxLength={6}
+                                placeholder="6-digit code"
+                                className="h-8 text-center text-sm tracking-[0.3em] font-semibold bg-white border-green-200 focus:border-[#4A8C6F]"
+                                value={otpInput}
+                                onChange={(e) => {
+                                  setOtpInput(
+                                    e.target.value.replace(/\D/g, "").slice(0, 6),
+                                  );
+                                  if (otpError) setOtpError("");
+                                }}
+                              />
+                              {devOtp && (
+                                <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                                  Dev mode — no SMS provider configured. Your code: <strong>{devOtp}</strong>
+                                </p>
+                              )}
+                              {otpError && (
+                                <p className="text-[10px] text-red-500">{otpError}</p>
+                              )}
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="cursor-pointer flex-1 h-8 bg-[#4A8C6F] hover:bg-[#3D7A5F] text-white text-xs"
+                                  onClick={handleVerifyOtp}
+                                  disabled={isVerifyingOtp || otpInput.length !== 6}
+                                >
+                                  {isVerifyingOtp ? "Verifying..." : "Verify"}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="cursor-pointer h-8 border-green-200 text-[#4A8C6F] hover:bg-green-50 text-xs"
+                                  onClick={() => {
+                                    setOtpId(null);
+                                    setOtpInput("");
+                                  }}
+                                >
+                                  Change
+                                </Button>
+                              </div>
+                              {otpCooldown > 0 && (
+                                <button
+                                  type="button"
+                                  className="cursor-pointer text-[10px] text-[#4A8C6F] hover:underline disabled:text-gray-400 disabled:no-underline"
+                                  disabled={isSendingOtp}
+                                  onClick={handleSendOtp}
+                                >
+                                  Resend code ({otpCooldown}s)
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-2 text-[11px] font-medium text-[#4A8C6F]">
+                          <BadgeCheck className="h-3.5 w-3.5" />
+                          Mobile number verified
+                        </div>
+                      )}
                     </div>
                     <div className="flex justify-between text-sm font-bold">
                       <span className="text-gray-700">Total</span>
@@ -1042,7 +1219,11 @@ export default function CustomerMenu() {
                     <Button
                       className="cursor-pointer w-full h-11 bg-[#4A8C6F] hover:bg-[#3D7A5F] text-white border-0 shadow-md shadow-green-200 font-semibold text-sm"
                       onClick={handleOrder}
-                      disabled={isOrdering || !customerPhone.replace(/\s/g, "")}
+                      disabled={
+                        isOrdering ||
+                        !otpVerified ||
+                        !customerPhone.replace(/\s/g, "")
+                      }
                     >
                       {isOrdering ? (
                         "Placing Order..."
@@ -1096,6 +1277,121 @@ export default function CustomerMenu() {
                     <p className="text-[11px] text-red-500 mt-1">{phoneError}</p>
                   )}
                 </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-gray-500">
+                    Mobile Number <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="tel"
+                    placeholder="e.g. +1 234 567 890"
+                    value={customerPhone}
+                    onChange={(e) => {
+                      setCustomerPhone(e.target.value);
+                      if (phoneError) setPhoneError("");
+                      if (otpVerified || otpId) {
+                        setOtpVerified(false);
+                        setOtpId(null);
+                        setOtpInput("");
+                        setDevOtp(null);
+                      }
+                    }}
+                    className="border-green-100 focus:border-[#4A8C6F]"
+                    required
+                  />
+                  {phoneError && (
+                    <p className="text-[11px] text-red-500 mt-1">{phoneError}</p>
+                  )}
+                </div>
+
+                {/* OTP Verification */}
+                {!otpVerified ? (
+                  <div className="rounded-xl border border-green-100 bg-green-50/40 p-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#4A8C6F]">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Verify your mobile number
+                    </div>
+                    {!otpId ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="cursor-pointer w-full h-9 border-green-200 text-[#4A8C6F] hover:bg-green-50 text-xs"
+                        onClick={handleSendOtp}
+                        disabled={isSendingOtp || otpCooldown > 0}
+                      >
+                        <Smartphone className="mr-1.5 h-3.5 w-3.5" />
+                        {isSendingOtp
+                          ? "Sending code..."
+                          : otpCooldown > 0
+                            ? `Resend in ${otpCooldown}s`
+                            : "Send OTP"}
+                      </Button>
+                    ) : (
+                      <>
+                        <Input
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder="6-digit code"
+                          className="h-9 text-center text-sm tracking-[0.3em] font-semibold bg-white border-green-200 focus:border-[#4A8C6F]"
+                          value={otpInput}
+                          onChange={(e) => {
+                            setOtpInput(
+                              e.target.value.replace(/\D/g, "").slice(0, 6),
+                            );
+                            if (otpError) setOtpError("");
+                          }}
+                        />
+                        {devOtp && (
+                          <p className="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                            Dev mode — no SMS provider configured. Your code: <strong>{devOtp}</strong>
+                          </p>
+                        )}
+                        {otpError && (
+                          <p className="text-[11px] text-red-500 mt-1">{otpError}</p>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="cursor-pointer flex-1 h-9 bg-[#4A8C6F] hover:bg-[#3D7A5F] text-white text-xs"
+                            onClick={handleVerifyOtp}
+                            disabled={isVerifyingOtp || otpInput.length !== 6}
+                          >
+                            {isVerifyingOtp ? "Verifying..." : "Verify & Continue"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer h-9 border-green-200 text-[#4A8C6F] hover:bg-green-50 text-xs"
+                            onClick={() => {
+                              setOtpId(null);
+                              setOtpInput("");
+                            }}
+                          >
+                            Change
+                          </Button>
+                        </div>
+                        {otpCooldown > 0 && (
+                          <button
+                            type="button"
+                            className="cursor-pointer text-[10px] text-[#4A8C6F] hover:underline disabled:text-gray-400 disabled:no-underline"
+                            disabled={isSendingOtp}
+                            onClick={handleSendOtp}
+                          >
+                            Resend code ({otpCooldown}s)
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-xs font-medium text-[#4A8C6F]">
+                    <BadgeCheck className="h-4 w-4" />
+                    Mobile number verified
+                  </div>
+                )}
+
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-gray-500">
                     Your Name <span className="text-gray-400">(optional)</span>
@@ -1166,14 +1462,23 @@ export default function CustomerMenu() {
                 <Button
                   className="cursor-pointer w-full h-12 bg-[#4A8C6F] hover:bg-[#3D7A5F] text-white border-0"
                   onClick={handleOrder}
-                  disabled={isOrdering || !customerPhone.replace(/\s/g, "")}
+                  disabled={
+                    isOrdering ||
+                    !otpVerified ||
+                    !customerPhone.replace(/\s/g, "")
+                  }
                 >
                   {isOrdering ? (
                     "Placing Order..."
-                  ) : (
+                  ) : otpVerified ? (
                     <>
                       <Send className="mr-2 h-4 w-4" />
                       Place Order
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="mr-2 h-4 w-4" />
+                      Verify phone to order
                     </>
                   )}
                 </Button>

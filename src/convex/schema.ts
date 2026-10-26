@@ -174,6 +174,18 @@ const schema = defineSchema({
     isActive: v.boolean(),
   }).index("by_planId", ["id"]),
 
+  // Phone OTP verification for customer orders
+  phoneOtps: defineTable({
+    restaurantId: v.id("restaurants"),
+    phone: v.string(),
+    code: v.string(),
+    expiresAt: v.number(),
+    attempts: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_restaurant_phone", ["restaurantId", "phone"])
+    .index("by_expiresAt", ["expiresAt"]),
+
   // Plan upgrade requests from restaurant owners
   planRequests: defineTable({
     restaurantId: v.id("restaurants"),
