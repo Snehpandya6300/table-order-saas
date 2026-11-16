@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { resolveStations } from "./aggregatorAdapters";
 
 export const getByRestaurant = query({
   args: {
@@ -86,7 +87,10 @@ export const create = mutation({
       items: args.items,
       totalAmount: args.totalAmount,
       status: "received",
+      source: "qr",
+      channel: "dine_in",
       paymentStatus: "unpaid",
+      stations: resolveStations(args.items.map((item) => ({ name: item.name }))),
       createdAt: Date.now(),
     });
   },
@@ -103,9 +107,30 @@ export const updateStatus = mutation({
       v.literal("served"),
       v.literal("cancelled"),
     ),
+    rejectionReason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { status: args.status });
+    const order = await ctx.db.get(args.id);
+    if (!order) throw new Error("Order not found");
+
+    const now = Date.now();
+    const patch: Record<string, unknown> = { status: args.status };
+    if (args.rejectionReason) patch.rejectionReason = args.rejectionReason;
+
+    if (args.status === "accepted" && !order.acceptedAt) patch.acceptedAt = now;
+    if (args.status === "ready") patch.readyAt = now;
+    if (args.status === "served") {
+      patch.completedAt = now;
+      if (order.channel === "delivery") patch.deliveryStatus = "delivered";
+    }
+    if (args.status === "cancelled") {
+      patch.completedAt = now;
+      if (order.channel === "delivery") patch.deliveryStatus = "cancelled";
+      // Aggregator-paid orders are refunded through the platform.
+      if (order.isPlatformPaid) patch.paymentStatus = "refunded";
+    }
+
+    await ctx.db.patch(args.id, patch);
   },
 });
 
@@ -127,6 +152,15 @@ export const updatePayment = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.id);
+    if (!order) throw new Error("Order not found");
+    // Aggregator paid online — collecting at the counter would double-charge.
+    if (order.isPlatformPaid && args.paymentStatus === "paid") {
+      throw new Error(
+        "This order was already paid on the aggregator platform and cannot be collected again",
+      );
+    }
+
     const updates: Record<string, unknown> = {
       paymentStatus: args.paymentStatus,
     };

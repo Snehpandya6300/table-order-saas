@@ -93,9 +93,55 @@ const schema = defineSchema({
         price: v.number(),
         quantity: v.number(),
         note: v.optional(v.string()),
+        // Present when the line came from an aggregator menu item.
+        externalItemId: v.optional(v.string()),
       }),
     ),
     totalAmount: v.number(),
+    // Order source. Missing `source` on legacy rows means a direct QR order.
+    source: v.optional(
+      v.union(
+        v.literal("qr"),
+        v.literal("pos"),
+        v.literal("aggregator"),
+      ),
+    ),
+    channel: v.optional(
+      v.union(
+        v.literal("dine_in"),
+        v.literal("delivery"),
+        v.literal("takeaway"),
+      ),
+    ),
+    // Third-party aggregator reference (Zomato / Swiggy / UrbanPiper / Petpooja)
+    integrationId: v.optional(v.id("integrations")),
+    externalPlatform: v.optional(v.string()),
+    externalOrderId: v.optional(v.string()),
+    externalStatus: v.optional(v.string()),
+    customerEmail: v.optional(v.string()),
+    customerAddress: v.optional(v.string()),
+    rejectionReason: v.optional(v.string()),
+    // Money breakdown used for reconciliation
+    subtotal: v.optional(v.number()),
+    taxAmount: v.optional(v.number()),
+    deliveryFee: v.optional(v.number()),
+    commission: v.optional(v.number()),
+    netSettlement: v.optional(v.number()),
+    isPlatformPaid: v.optional(v.boolean()),
+    deliveryStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("assigned"),
+        v.literal("picked_up"),
+        v.literal("delivered"),
+        v.literal("cancelled"),
+      ),
+    ),
+    // Kitchen stations the order was routed to
+    stations: v.optional(v.array(v.string())),
+    acceptedAt: v.optional(v.number()),
+    readyAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
     status: v.union(
       v.literal("received"),
       v.literal("accepted"),
@@ -124,7 +170,8 @@ const schema = defineSchema({
     createdAt: v.number(),
   })
     .index("by_restaurant", ["restaurantId", "createdAt"])
-    .index("by_phone", ["customerPhone"]),
+    .index("by_phone", ["customerPhone"])
+    .index("by_external", ["integrationId", "externalOrderId"]),
 
   // Customer management
   customers: defineTable({
@@ -185,6 +232,82 @@ const schema = defineSchema({
   })
     .index("by_restaurant_phone", ["restaurantId", "phone"])
     .index("by_expiresAt", ["expiresAt"]),
+
+  // Online ordering integrations (Zomato, Swiggy, UrbanPiper, Petpooja, custom)
+  integrations: defineTable({
+    restaurantId: v.id("restaurants"),
+    platform: v.union(
+      v.literal("zomato"),
+      v.literal("swiggy"),
+      v.literal("urbanpiper"),
+      v.literal("petpooja"),
+      v.literal("custom"),
+    ),
+    displayName: v.string(),
+    // Public token used in the webhook URL
+    webhookKey: v.string(),
+    // HMAC-SHA256 signing secret shared with the aggregator
+    webhookSecret: v.string(),
+    // Outbound API credentials for status / menu sync (optional)
+    apiKey: v.optional(v.string()),
+    apiBaseUrl: v.optional(v.string()),
+    // External outlet / branch this integration maps to
+    outletId: v.optional(v.string()),
+    isEnabled: v.boolean(),
+    lastEventAt: v.optional(v.number()),
+    lastSyncAt: v.optional(v.number()),
+    lastVerifiedAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    failureCount: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_restaurant", ["restaurantId"])
+    .index("by_restaurant_platform", ["restaurantId", "platform"])
+    .index("by_webhookKey", ["webhookKey"]),
+
+  // Webhook delivery log + idempotency ledger
+  aggregatorEvents: defineTable({
+    integrationId: v.optional(v.id("integrations")),
+    restaurantId: v.optional(v.id("restaurants")),
+    platform: v.string(),
+    webhookKey: v.string(),
+    eventId: v.string(),
+    eventType: v.string(),
+    status: v.union(
+      v.literal("processed"),
+      v.literal("duplicate"),
+      v.literal("rejected"),
+      v.literal("unmapped"),
+      v.literal("failed"),
+    ),
+    reason: v.optional(v.string()),
+    externalOrderId: v.optional(v.string()),
+    orderId: v.optional(v.id("orders")),
+    payload: v.string(),
+    receivedAt: v.number(),
+    processedAt: v.optional(v.number()),
+  })
+    .index("by_integration", ["integrationId"])
+    .index("by_integration_event", ["integrationId", "eventId"])
+    .index("by_restaurant", ["restaurantId"])
+    .index("by_externalOrder", ["integrationId", "externalOrderId"]),
+
+  // External menu item -> internal menu item mappings
+  externalMenuMappings: defineTable({
+    integrationId: v.id("integrations"),
+    restaurantId: v.id("restaurants"),
+    platform: v.string(),
+    externalItemId: v.string(),
+    externalItemName: v.string(),
+    externalPrice: v.optional(v.number()),
+    menuItemId: v.id("menuItems"),
+    // Availability mirrored from the platform, if known
+    isAvailable: v.boolean(),
+    lastSyncedAt: v.number(),
+  })
+    .index("by_integration", ["integrationId"])
+    .index("by_integration_external", ["integrationId", "externalItemId"])
+    .index("by_menuItem", ["menuItemId"]),
 
   // Plan upgrade requests from restaurant owners
   planRequests: defineTable({

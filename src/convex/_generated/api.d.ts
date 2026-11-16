@@ -9,6 +9,12 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as aggregatorAdapters from "../aggregatorAdapters.js";
+import type * as aggregatorIngest from "../aggregatorIngest.js";
+import type * as aggregatorInternal from "../aggregatorInternal.js";
+import type * as aggregatorSignature from "../aggregatorSignature.js";
+import type * as aggregatorWebhook from "../aggregatorWebhook.js";
+import type * as aggregators from "../aggregators.js";
 import type * as auth from "../auth.js";
 import type * as auth_emailOtp from "../auth/emailOtp.js";
 import type * as categories from "../categories.js";
@@ -33,6 +39,12 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  aggregatorAdapters: typeof aggregatorAdapters;
+  aggregatorIngest: typeof aggregatorIngest;
+  aggregatorInternal: typeof aggregatorInternal;
+  aggregatorSignature: typeof aggregatorSignature;
+  aggregatorWebhook: typeof aggregatorWebhook;
+  aggregators: typeof aggregators;
   auth: typeof auth;
   "auth/emailOtp": typeof auth_emailOtp;
   categories: typeof categories;

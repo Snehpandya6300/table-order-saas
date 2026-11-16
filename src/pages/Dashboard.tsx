@@ -19,6 +19,9 @@ import { MenuManager } from "@/components/dashboard/MenuManager";
 import { TableManager } from "@/components/dashboard/TableManager";
 import { OrderManager } from "@/components/dashboard/OrderManager";
 import { StaffManager } from "@/components/dashboard/StaffManager";
+import { KitchenDisplay } from "@/components/dashboard/KitchenDisplay";
+import { IntegrationsManager } from "@/components/dashboard/IntegrationsManager";
+import { AggregatorReports } from "@/components/dashboard/AggregatorReports";
 import {
   LogOut,
   Menu,
@@ -43,13 +46,17 @@ import {
   Camera,
   X,
   ImagePlus,
+  ChefHat,
+  Plug,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
-type Tab = "orders" | "menu" | "tables" | "staff" | "settings";
+type Tab = "orders" | "kitchen" | "menu" | "tables" | "staff" | "settings";
+type SettingsSection = "general" | "online";
 
 const ALL_TABS: { id: Tab; label: string; icon: typeof QrCode; minRole?: string }[] = [
   { id: "orders", label: "Orders", icon: ClipboardList },
+  { id: "kitchen", label: "Kitchen", icon: ChefHat },
   { id: "menu", label: "Menu", icon: Menu, minRole: "manager" },
   { id: "tables", label: "Tables", icon: LayoutGrid, minRole: "manager" },
   { id: "staff", label: "Staff", icon: Users, minRole: "owner" },
@@ -60,6 +67,7 @@ export default function Dashboard() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("orders");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
 
   const ownedRestaurants = useQuery(
     api.restaurants.getByOwner,
@@ -460,6 +468,9 @@ export default function Dashboard() {
         {activeTab === "orders" && restaurant && (
           <OrderManager restaurantId={restaurant._id} />
         )}
+        {activeTab === "kitchen" && restaurant && (
+          <KitchenDisplay restaurantId={restaurant._id} />
+        )}
         {activeTab === "menu" && restaurant && (
           <MenuManager restaurantId={restaurant._id} />
         )}
@@ -475,6 +486,32 @@ export default function Dashboard() {
         )}
         {activeTab === "settings" && restaurant && (
           <div className="space-y-4">
+            <div className="flex w-fit gap-1 rounded-lg border border-green-100 bg-white p-1">
+              <button
+                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  settingsSection === "general"
+                    ? "bg-[#4A8C6F] text-white"
+                    : "text-gray-500 hover:text-[#4A8C6F]"
+                }`}
+                onClick={() => setSettingsSection("general")}
+              >
+                General
+              </button>
+              <button
+                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  settingsSection === "online"
+                    ? "bg-[#4A8C6F] text-white"
+                    : "text-gray-500 hover:text-[#4A8C6F]"
+                }`}
+                onClick={() => setSettingsSection("online")}
+              >
+                <Plug className="h-3.5 w-3.5" />
+                Online Ordering
+              </button>
+            </div>
+
+            {settingsSection === "general" ? (
+              <>
             {/* Logo Upload */}
             <Card className="border-green-100 bg-white">
               <CardContent className="p-6">
@@ -594,6 +631,13 @@ export default function Dashboard() {
                 </div>
               </CardContent>
             </Card>
+              </>
+            ) : (
+              <div className="space-y-8">
+                <IntegrationsManager restaurantId={restaurant._id} />
+                <AggregatorReports restaurantId={restaurant._id} />
+              </div>
+            )}
           </div>
         )}
           </>
