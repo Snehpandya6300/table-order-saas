@@ -130,20 +130,35 @@ function validateAndNormalizeItems(raw: unknown): ExtractedMenuItem[] {
         description = i.description.trim();
       }
       
-      // Normalize category
+      // Normalize category: trim, collapse whitespace, and title-case so
+      // "Starters", "  starters  " and "Starters " all map to one category.
       let category = "Other";
       if (typeof i.category === "string" && i.category.trim().length > 0) {
-        category = i.category.trim();
+        category = collapseAndTitleCase(i.category.trim());
       }
       
       return {
         name: String(i.name).trim(),
         price,
         category,
-        isVeg,
-        description,
-      };
-    });
+              isVeg,
+      description,
+    };
+  });
+}
+
+/** Collapse inner whitespace to a single space, then title-case each word.
+ *  "  north indian   thali " -> "North Indian Thali".
+ *  Keeps short all-caps tokens (e.g. "AI", "BBQ") from being mangled.
+ */
+function collapseAndTitleCase(raw: string): string {
+  const words = raw.split(/\s+/).filter(Boolean);
+  return words
+    .map((w) => {
+      if (w.length <= 2) return w.toUpperCase();
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join(" ");
 }
 
 // ─── Main Action ────────────────────────────────────────────

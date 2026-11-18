@@ -99,6 +99,18 @@ export function MenuManager({
 
   const sortedCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
 
+  /** Normalize a category name in UI: trim, collapse whitespace, title-case.
+   *  Keeps "Starters", "  starters  " and "Starters " in one bucket so the same
+   *  category is reused across CSV/photo/manual imports and edits.
+   */
+  const normalizeCategory = (name: string): string => {
+    const words = String(name).trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return "";
+    return words
+      .map((w) => (w.length <= 2 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+      .join(" ");
+  };
+
   // ─── Category Handlers ─────────────────────────────────────
   const openAddCategory = () => {
     setEditingCategory(null);
@@ -114,12 +126,14 @@ export function MenuManager({
 
   const handleSaveCategory = async () => {
     if (!categoryName.trim()) return;
+    const name = normalizeCategory(categoryName);
+    if (!name) return;
     if (editingCategory) {
-      await updateCategory({ id: editingCategory, name: categoryName.trim() });
+      await updateCategory({ id: editingCategory, name });
     } else {
       await createCategory({
         restaurantId,
-        name: categoryName.trim(),
+        name,
         sortOrder: categories.length,
       });
     }
@@ -245,15 +259,20 @@ export function MenuManager({
       try {
         // Find or create category
         let categoryId: Id<"categories">;
+        const catName = normalizeCategory(item.category);
+        if (!catName) {
+          failed++;
+          continue;
+        }
         const existing = sortedCategories.find(
-          (c) => c.name.toLowerCase() === item.category.toLowerCase()
+          (c) => c.name.toLowerCase() === catName.toLowerCase()
         );
         if (existing) {
           categoryId = existing._id;
         } else {
           categoryId = await createCategory({
             restaurantId,
-            name: item.category,
+            name: catName,
             sortOrder: categories.length + success,
           });
         }
@@ -287,12 +306,39 @@ export function MenuManager({
   };
 
   // ─── Photo Menu Handlers ───────────────────────────────────
+  const MENU_PHOTO_FORMATS = [
+    "image/webp",
+    "image/svg+xml",
+    "image/png",
+    "image/jpeg",
+  ];
+
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setMenuPhoto(file);
+
+    if (!MENU_PHOTO_FORMATS.includes(file.type)) {
+      setPhotoError(
+        "Menu photos must be WebP, SVG, PNG, or JPG."
+      );
+      setMenuPhoto(null);
+      setMenuPhotoPreview(null);
+      return;
+    }
+
+    // Tiny files (e.g. <100px favicons) usually can't be read as base64 / aren't
+    // real menu images — tell the user instead of failing later in AI.
+    if (file.size < 500) {
+      setPhotoError("That file looks too small for a menu photo. Try a clearer image.");
+      setMenuPhoto(null);
+      setMenuPhotoPreview(null);
+      return;
+    }
+
     setPhotoError("");
     setPhotoItems([]);
+    setMenuPhoto(file);
+    setMenuPhotoPreview(null);
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -340,7 +386,7 @@ export function MenuManager({
       const reviewItems = extractedItems.map((item) => ({
         name: item.name,
         price: item.price !== null ? String(item.price) : "",
-        category: item.category,
+        category: normalizeCategory(item.category),
         description: item.description || "",
         isVeg: item.isVeg ?? false,
         _originalPrice: item.price,
@@ -384,16 +430,17 @@ export function MenuManager({
         continue;
       }
       try {
+        const catName = normalizeCategory(item.category);
         let categoryId: Id<"categories">;
         const existing = sortedCategories.find(
-          (c) => c.name.toLowerCase() === item.category.toLowerCase()
+          (c) => c.name.toLowerCase() === catName.toLowerCase()
         );
         if (existing) {
           categoryId = existing._id;
         } else {
           categoryId = await createCategory({
             restaurantId,
-            name: item.category,
+            name: catName,
             sortOrder: categories.length + success,
           });
         }
@@ -928,7 +975,7 @@ export function MenuManager({
             <div>
               <input
                 type="file"
-                accept="image/*"
+                accept=".webp,.svg,.png,.jpg,.jpeg,image/webp,image/svg+xml,image/png,image/jpeg"
                 className="hidden"
                 ref={photoInputRef}
                 onChange={handlePhotoUpload}

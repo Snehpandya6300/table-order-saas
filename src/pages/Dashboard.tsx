@@ -148,17 +148,44 @@ export default function Dashboard() {
 
   const isSuspended = restaurant?.subscriptionStatus === "suspended";
 
+  const HANDY_FORMATS = [
+    "image/webp",
+    "image/svg+xml",
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+  ];
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !restaurant) return;
+
+    // Accept WebP, SVG, PNG, JPG/JPEG; small files are fine — they display everywhere.
+    if (!HANDY_FORMATS.includes(file.type)) {
+      alert(
+        "Please upload a WebP, SVG, PNG, or JPG image. Other formats are not supported."
+      );
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Logo must be smaller than 5 MB.");
+      return;
+    }
+
     setLogoUploading(true);
     try {
       const uploadUrl = await generateUploadUrl();
+      const headers: Record<string, string> = { "Content-Type": file.type };
+      // SVG has no meaningful size for content-length negotiation; Convex storage
+      // accepts small SVGs directly, so send them as-is.
       const response = await fetch(uploadUrl, {
         method: "POST",
-        headers: { "Content-Type": file.type },
+        headers,
         body: file,
       });
+      if (!response.ok) {
+        throw new Error(`Upload returned ${response.status}`);
+      }
       const { storageId } = await response.json();
       // Build the Convex file URL from storageId
       const convexUrl = import.meta.env.VITE_CONVEX_URL as string;
@@ -614,13 +641,13 @@ export default function Dashboard() {
                       Upload your restaurant logo. It will appear in the dashboard header and on the customer menu.
                     </p>
                     <p className="text-xs text-gray-400">
-                      Recommended: Square image, at least 200×200px. JPG, PNG, or WebP.
+                      WebP, SVG, PNG, or JPG. Small files are fine — the logo will still be shown in the header, on the customer menu, and in QR codes.
                     </p>
                     <div className="flex gap-2">
                       <label className="cursor-pointer">
                         <input
                           type="file"
-                          accept="image/*"
+                          accept=".webp,.svg,.png,.jpg,.jpeg,image/webp,image/svg+xml,image/png,image/jpeg"
                           className="hidden"
                           onChange={handleLogoUpload}
                           disabled={logoUploading}
