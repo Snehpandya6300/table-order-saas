@@ -65,6 +65,16 @@ const schema = defineSchema({
     isAvailable: v.boolean(),
     isVeg: v.boolean(),
     sortOrder: v.number(),
+    // Recipe lines used for ingredient-level stock deduction and food costing
+    recipe: v.optional(
+      v.array(
+        v.object({
+          ingredientId: v.id("ingredients"),
+          quantity: v.number(),
+        }),
+      ),
+    ),
+    prepTimeMinutes: v.optional(v.number()),
   })
     .index("by_restaurant", ["restaurantId"])
     .index("by_category", ["categoryId"]),
@@ -137,6 +147,15 @@ const schema = defineSchema({
         v.literal("cancelled"),
       ),
     ),
+    // Delivery rider assignment (in-house delivery)
+    riderId: v.optional(v.id("riders")),
+    assignedAt: v.optional(v.number()),
+    pickedUpAt: v.optional(v.number()),
+    deliveredAt: v.optional(v.number()),
+    // Coupon redemption
+    couponCode: v.optional(v.string()),
+    couponId: v.optional(v.id("coupons")),
+    discountAmount: v.optional(v.number()),
     // Kitchen stations the order was routed to
     stations: v.optional(v.array(v.string())),
     acceptedAt: v.optional(v.number()),
@@ -308,6 +327,235 @@ const schema = defineSchema({
     .index("by_integration", ["integrationId"])
     .index("by_integration_external", ["integrationId", "externalItemId"])
     .index("by_menuItem", ["menuItemId"]),
+
+  // ── Reservations & waitlist ────────────────────────────────────────────
+  reservations: defineTable({
+    restaurantId: v.id("restaurants"),
+    guestName: v.string(),
+    guestPhone: v.string(),
+    guestEmail: v.optional(v.string()),
+    partySize: v.number(),
+    tableId: v.optional(v.id("tables")),
+    tableLabel: v.optional(v.string()),
+    // Local calendar date (YYYY-MM-DD) and 24h slot (HH:mm)
+    date: v.string(),
+    time: v.string(),
+    durationMinutes: v.number(),
+    status: v.union(
+      v.literal("booked"),
+      v.literal("seated"),
+      v.literal("completed"),
+      v.literal("cancelled"),
+      v.literal("no_show"),
+    ),
+    source: v.union(
+      v.literal("phone"),
+      v.literal("walk_in"),
+      v.literal("online"),
+      v.literal("staff"),
+    ),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    seatedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_restaurant_date", ["restaurantId", "date"])
+    .index("by_restaurant", ["restaurantId"]),
+
+  waitlistEntries: defineTable({
+    restaurantId: v.id("restaurants"),
+    guestName: v.string(),
+    guestPhone: v.string(),
+    partySize: v.number(),
+    status: v.union(
+      v.literal("waiting"),
+      v.literal("seated"),
+      v.literal("cancelled"),
+    ),
+    quotedMinutes: v.number(),
+    notes: v.optional(v.string()),
+    tableId: v.optional(v.id("tables")),
+    tableLabel: v.optional(v.string()),
+    joinedAt: v.number(),
+    notifiedAt: v.optional(v.number()),
+    seatedAt: v.optional(v.number()),
+  })
+    .index("by_restaurant_status", ["restaurantId", "status"])
+    .index("by_restaurant", ["restaurantId"]),
+
+  // ── Inventory & stock ──────────────────────────────────────────────────
+  suppliers: defineTable({
+    restaurantId: v.id("restaurants"),
+    name: v.string(),
+    phone: v.optional(v.string()),
+    email: v.optional(v.string()),
+    address: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_restaurant", ["restaurantId"]),
+
+  ingredients: defineTable({
+    restaurantId: v.id("restaurants"),
+    name: v.string(),
+    unit: v.string(),
+    category: v.optional(v.string()),
+    currentStock: v.number(),
+    parLevel: v.number(),
+    costPerUnit: v.number(),
+    supplierId: v.optional(v.id("suppliers")),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_restaurant", ["restaurantId"])
+    .index("by_restaurant_name", ["restaurantId", "name"]),
+
+  // Immutable stock ledger: purchases, deductions, waste, adjustments
+  stockMovements: defineTable({
+    restaurantId: v.id("restaurants"),
+    ingredientId: v.id("ingredients"),
+    type: v.union(
+      v.literal("purchase"),
+      v.literal("deduction"),
+      v.literal("waste"),
+      v.literal("adjustment"),
+      v.literal("return"),
+    ),
+    // Signed quantity in the ingredient's unit
+    quantity: v.number(),
+    unitCost: v.optional(v.number()),
+    // Batch / lot tracking for goods receipts
+    batchCode: v.optional(v.string()),
+    expiryDate: v.optional(v.string()),
+    reason: v.optional(v.string()),
+    orderId: v.optional(v.id("orders")),
+    purchaseOrderId: v.optional(v.id("purchaseOrders")),
+    createdBy: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_restaurant", ["restaurantId", "createdAt"])
+    .index("by_ingredient", ["ingredientId", "createdAt"])
+    .index("by_order", ["orderId"]),
+
+  purchaseOrders: defineTable({
+    restaurantId: v.id("restaurants"),
+    supplierId: v.optional(v.id("suppliers")),
+    supplierName: v.string(),
+    orderNumber: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("sent"),
+      v.literal("received"),
+      v.literal("cancelled"),
+    ),
+    items: v.array(
+      v.object({
+        ingredientId: v.id("ingredients"),
+        name: v.string(),
+        quantity: v.number(),
+        unitCost: v.number(),
+        receivedQuantity: v.optional(v.number()),
+        batchCode: v.optional(v.string()),
+        expiryDate: v.optional(v.string()),
+      }),
+    ),
+    total: v.number(),
+    notes: v.optional(v.string()),
+    expectedAt: v.optional(v.string()),
+    receivedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_restaurant", ["restaurantId", "createdAt"])
+    .index("by_status", ["restaurantId", "status"]),
+
+  // ── Delivery riders ────────────────────────────────────────────────────
+  riders: defineTable({
+    restaurantId: v.id("restaurants"),
+    name: v.string(),
+    phone: v.string(),
+    passwordHash: v.string(),
+    passwordSalt: v.string(),
+    vehicle: v.optional(v.string()),
+    isActive: v.boolean(),
+    isOnline: v.boolean(),
+    lastSeenAt: v.optional(v.number()),
+    currentLocation: v.optional(
+      v.object({
+        lat: v.number(),
+        lng: v.number(),
+        accuracy: v.optional(v.number()),
+        updatedAt: v.number(),
+      }),
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_restaurant", ["restaurantId"])
+    .index("by_phone", ["phone"]),
+
+  riderSessions: defineTable({
+    riderId: v.id("riders"),
+    restaurantId: v.id("restaurants"),
+    token: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_rider", ["riderId"]),
+
+  // ── Coupons & campaigns ────────────────────────────────────────────────
+  coupons: defineTable({
+    restaurantId: v.id("restaurants"),
+    code: v.string(),
+    description: v.optional(v.string()),
+    type: v.union(v.literal("percent"), v.literal("flat")),
+    value: v.number(),
+    minOrder: v.number(),
+    maxDiscount: v.optional(v.number()),
+    // Validity window (epoch ms). Happy hour uses the daily time window.
+    startsAt: v.optional(v.number()),
+    endsAt: v.optional(v.number()),
+    startTime: v.optional(v.string()),
+    endTime: v.optional(v.string()),
+    daysOfWeek: v.optional(v.array(v.number())),
+    maxUses: v.optional(v.number()),
+    usedCount: v.number(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_restaurant", ["restaurantId"])
+    .index("by_restaurant_code", ["restaurantId", "code"]),
+
+  campaigns: defineTable({
+    restaurantId: v.id("restaurants"),
+    name: v.string(),
+    channel: v.union(
+      v.literal("email"),
+      v.literal("sms"),
+      v.literal("whatsapp"),
+    ),
+    subject: v.optional(v.string()),
+    body: v.string(),
+    // Verified sender on the restaurant's own mail domain
+    fromAddress: v.optional(v.string()),
+    audience: v.union(
+      v.literal("all"),
+      v.literal("repeat"),
+      v.literal("lapsed"),
+      v.literal("high_spenders"),
+    ),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("sent"),
+      v.literal("handed_off"),
+      v.literal("failed"),
+    ),
+    recipientCount: v.number(),
+    sentCount: v.number(),
+    failedCount: v.number(),
+    lastError: v.optional(v.string()),
+    sentAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_restaurant", ["restaurantId"]),
 
   // Plan upgrade requests from restaurant owners
   planRequests: defineTable({

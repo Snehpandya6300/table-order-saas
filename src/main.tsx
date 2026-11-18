@@ -16,6 +16,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const CustomerMenu = lazy(() => import("./pages/CustomerMenu.tsx"));
 const OrderStatus = lazy(() => import("./pages/OrderStatus.tsx"));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
+const Rider = lazy(() => import("./pages/Rider.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -143,6 +144,7 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               />
+              <Route path="/rider" element={<Rider />} />
               <Route path="/q/:token" element={<CustomerMenu />} />
               <Route path="/order/:orderId" element={<OrderStatus />} />
               <Route path="*" element={<NotFound />} />

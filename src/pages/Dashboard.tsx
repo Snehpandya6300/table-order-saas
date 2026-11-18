@@ -22,6 +22,11 @@ import { StaffManager } from "@/components/dashboard/StaffManager";
 import { KitchenDisplay } from "@/components/dashboard/KitchenDisplay";
 import { IntegrationsManager } from "@/components/dashboard/IntegrationsManager";
 import { AggregatorReports } from "@/components/dashboard/AggregatorReports";
+import { ReservationsManager } from "@/components/dashboard/ReservationsManager";
+import { DeliveryManager } from "@/components/dashboard/DeliveryManager";
+import { InventoryManager } from "@/components/dashboard/InventoryManager";
+import { ReportsCenter } from "@/components/dashboard/ReportsCenter";
+import { MarketingManager } from "@/components/dashboard/MarketingManager";
 import {
   LogOut,
   Menu,
@@ -48,15 +53,35 @@ import {
   ImagePlus,
   ChefHat,
   Plug,
+  CalendarClock,
+  Bike,
+  Boxes,
+  BarChart3,
+  Ticket,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
-type Tab = "orders" | "kitchen" | "menu" | "tables" | "staff" | "settings";
+type Tab =
+  | "orders"
+  | "kitchen"
+  | "reservations"
+  | "delivery"
+  | "inventory"
+  | "reports"
+  | "menu"
+  | "tables"
+  | "staff"
+  | "settings";
 type SettingsSection = "general" | "online";
+type ReportSection = "reports" | "marketing";
 
 const ALL_TABS: { id: Tab; label: string; icon: typeof QrCode; minRole?: string }[] = [
   { id: "orders", label: "Orders", icon: ClipboardList },
   { id: "kitchen", label: "Kitchen", icon: ChefHat },
+  { id: "reservations", label: "Reservations", icon: CalendarClock },
+  { id: "delivery", label: "Delivery", icon: Bike },
+  { id: "inventory", label: "Inventory", icon: Boxes, minRole: "manager" },
+  { id: "reports", label: "Reports", icon: BarChart3, minRole: "manager" },
   { id: "menu", label: "Menu", icon: Menu, minRole: "manager" },
   { id: "tables", label: "Tables", icon: LayoutGrid, minRole: "manager" },
   { id: "staff", label: "Staff", icon: Users, minRole: "owner" },
@@ -68,6 +93,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("orders");
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  const [reportSection, setReportSection] = useState<ReportSection>("reports");
 
   const ownedRestaurants = useQuery(
     api.restaurants.getByOwner,
@@ -470,6 +496,46 @@ export default function Dashboard() {
         )}
         {activeTab === "kitchen" && restaurant && (
           <KitchenDisplay restaurantId={restaurant._id} />
+        )}
+        {activeTab === "reservations" && restaurant && (
+          <ReservationsManager restaurantId={restaurant._id} />
+        )}
+        {activeTab === "delivery" && restaurant && (
+          <DeliveryManager restaurantId={restaurant._id} />
+        )}
+        {activeTab === "inventory" && restaurant && (
+          <InventoryManager restaurantId={restaurant._id} />
+        )}
+        {activeTab === "reports" && restaurant && (
+          <div className="space-y-4">
+            <div className="flex w-fit gap-1 rounded-lg border border-green-100 bg-white p-1">
+              <button
+                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  reportSection === "reports"
+                    ? "bg-[#4A8C6F] text-white"
+                    : "text-gray-500 hover:text-[#4A8C6F]"
+                }`}
+                onClick={() => setReportSection("reports")}
+              >
+                <BarChart3 className="h-3.5 w-3.5" /> Reports
+              </button>
+              <button
+                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  reportSection === "marketing"
+                    ? "bg-[#4A8C6F] text-white"
+                    : "text-gray-500 hover:text-[#4A8C6F]"
+                }`}
+                onClick={() => setReportSection("marketing")}
+              >
+                <Ticket className="h-3.5 w-3.5" /> Coupons & campaigns
+              </button>
+            </div>
+            {reportSection === "reports" ? (
+              <ReportsCenter restaurantId={restaurant._id} />
+            ) : (
+              <MarketingManager restaurantId={restaurant._id} />
+            )}
+          </div>
         )}
         {activeTab === "menu" && restaurant && (
           <MenuManager restaurantId={restaurant._id} />

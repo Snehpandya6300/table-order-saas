@@ -11,6 +11,10 @@ import {
   Users,
   ChefHat,
   LayoutDashboard,
+  CalendarClock,
+  Boxes,
+  Bike,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router";
@@ -57,6 +61,36 @@ const features = [
     title: "KOT Management",
     description:
       "Kitchen Order Tickets flow directly from the counter to the kitchen. No paper, no delays.",
+  },
+  {
+    icon: CalendarClock,
+    title: "Reservations & Waitlist",
+    description:
+      "Take bookings, manage the day's seating, and keep a live waitlist with estimated waits on the same floor plan.",
+  },
+  {
+    icon: Boxes,
+    title: "Inventory & Stock",
+    description:
+      "Recipe-based costing, purchase orders, batch and expiry receipts, and waste logging — stock deducts as orders are billed.",
+  },
+  {
+    icon: Bike,
+    title: "Delivery Riders",
+    description:
+      "Riders sign in with phone and password, go online, share live location, and collect cash at the door.",
+  },
+  {
+    icon: BarChart3,
+    title: "18 Reports",
+    description:
+      "Sales, peaks, food cost, retention and more — print or export any report as CSV in one click.",
+  },
+  {
+    icon: Ticket,
+    title: "Coupons & Campaigns",
+    description:
+      "Run coupon codes and happy-hour offers, then bring guests back with email, SMS or WhatsApp campaigns.",
   },
   {
     icon: Store,

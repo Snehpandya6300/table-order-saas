@@ -3,6 +3,7 @@ import { useParams } from "react-router";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ import {
   ShieldCheck,
   BadgeCheck,
   Smartphone,
+  Ticket,
 } from "lucide-react";
 
 interface CartItem {
@@ -167,6 +169,9 @@ export default function CustomerMenu() {
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("menu");
   const [viewingOrderId, setViewingOrderId] = useState<string | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState("");
 
   const tableData = useQuery(
     api.tables.getByQrToken,
@@ -266,6 +271,19 @@ export default function CustomerMenu() {
     () => cart.reduce((sum, item) => sum + item.quantity, 0),
     [cart],
   );
+
+  const couponPreview = useQuery(
+    api.marketing.previewCoupon,
+    appliedCoupon && tableData?.restaurantId
+      ? {
+          restaurantId: tableData.restaurantId,
+          code: appliedCoupon,
+          subtotal: cartTotal,
+        }
+      : "skip",
+  );
+  const couponDiscount = couponPreview?.ok ? couponPreview.discount : 0;
+  const payableTotal = Math.max(0, cartTotal - couponDiscount);
 
   const addToCart = useCallback(
     (item: MenuItem, quantity: number, note: string) => {
@@ -401,14 +419,21 @@ export default function CustomerMenu() {
           note: c.note || undefined,
         })),
         totalAmount: cartTotal,
+        couponCode: appliedCoupon ?? undefined,
       });
       addStoredOrderId(tableData.restaurantId, orderId);
+      setAppliedCoupon(null);
+      setCouponInput("");
+      setCouponError("");
       setStoredOrderIds(getStoredOrderIds(tableData.restaurantId));
       setOrderSuccess(orderId);
       setCart([]);
       setShowCart(false);
     } catch (err) {
       console.error("Failed to place order:", err);
+      toast.error(
+        err instanceof Error ? err.message : "Could not place the order. Please try again.",
+      );
     } finally {
       setIsOrdering(false);
     }
@@ -1210,10 +1235,69 @@ export default function CustomerMenu() {
                         </div>
                       )}
                     </div>
+                    <div className="rounded-lg border border-green-200 bg-green-50/50 p-2.5">
+                      {appliedCoupon ? (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="flex items-center gap-1.5 font-medium text-[#3D7A5F]">
+                            <Ticket className="h-3.5 w-3.5" />
+                            {appliedCoupon} applied
+                          </span>
+                          <button
+                            type="button"
+                            className="cursor-pointer text-[11px] text-gray-400 hover:text-red-500"
+                            onClick={() => {
+                              setAppliedCoupon(null);
+                              setCouponInput("");
+                              setCouponError("");
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-1.5">
+                          <Input
+                            value={couponInput}
+                            onChange={(e) => {
+                              setCouponInput(e.target.value.toUpperCase());
+                              setCouponError("");
+                            }}
+                            placeholder="Coupon code"
+                            className="h-8 bg-white font-mono text-xs"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 shrink-0 cursor-pointer border-green-300 text-[11px] text-[#4A8C6F] hover:bg-green-50"
+                            disabled={!couponInput.trim()}
+                            onClick={() => {
+                              if (!couponInput.trim()) return;
+                              setAppliedCoupon(couponInput.trim().toUpperCase());
+                              setCouponError("");
+                            }}
+                          >
+                            Apply
+                          </Button>
+                        </div>
+                      )}
+                      {appliedCoupon && couponPreview && !couponPreview.ok && (
+                        <p className="mt-1 text-[10px] text-red-500">{couponPreview.reason}</p>
+                      )}
+                      {couponError && (
+                        <p className="mt-1 text-[10px] text-red-500">{couponError}</p>
+                      )}
+                    </div>
+                    {couponDiscount > 0 && (
+                      <div className="flex justify-between text-xs text-[#3D7A5F]">
+                        <span>Coupon discount</span>
+                        <span className="tabular-nums">−${couponDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm font-bold">
                       <span className="text-gray-700">Total</span>
                       <span className="text-[#4A8C6F] tabular-nums">
-                        ${cartTotal.toFixed(2)}
+                        ${payableTotal.toFixed(2)}
                       </span>
                     </div>
                     <Button
@@ -1453,10 +1537,65 @@ export default function CustomerMenu() {
           {cart.length > 0 && (
             <SheetFooter className="border-t border-green-100 pt-4">
               <div className="w-full space-y-3">
+                <div className="rounded-lg border border-green-200 bg-green-50/50 p-2.5">
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 font-medium text-[#3D7A5F]">
+                        <Ticket className="h-3.5 w-3.5" /> {appliedCoupon} applied
+                      </span>
+                      <button
+                        type="button"
+                        className="cursor-pointer text-[11px] text-gray-400 hover:text-red-500"
+                        onClick={() => {
+                          setAppliedCoupon(null);
+                          setCouponInput("");
+                          setCouponError("");
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      <Input
+                        value={couponInput}
+                        onChange={(e) => {
+                          setCouponInput(e.target.value.toUpperCase());
+                          setCouponError("");
+                        }}
+                        placeholder="Coupon code"
+                        className="h-8 bg-white font-mono text-xs"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 shrink-0 cursor-pointer border-green-300 text-[11px] text-[#4A8C6F] hover:bg-green-50"
+                        disabled={!couponInput.trim()}
+                        onClick={() => {
+                          if (!couponInput.trim()) return;
+                          setAppliedCoupon(couponInput.trim().toUpperCase());
+                          setCouponError("");
+                        }}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  )}
+                  {appliedCoupon && couponPreview && !couponPreview.ok && (
+                    <p className="mt-1 text-[10px] text-red-500">{couponPreview.reason}</p>
+                  )}
+                </div>
+                {couponDiscount > 0 && (
+                  <div className="flex justify-between text-xs text-[#3D7A5F]">
+                    <span>Coupon discount</span>
+                    <span className="tabular-nums">−${couponDiscount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm font-bold">
                   <span>Total</span>
                   <span className="tabular-nums text-[#4A8C6F]">
-                    ${cartTotal.toFixed(2)}
+                    ${payableTotal.toFixed(2)}
                   </span>
                 </div>
                 <Button

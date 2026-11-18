@@ -11,6 +11,7 @@ import {
   resolveStations,
   type NormalizedItem,
 } from "./aggregatorAdapters";
+import { deductOrderIngredients } from "./inventoryOps";
 
 /**
  * Idempotent webhook ingestion.
@@ -310,6 +311,17 @@ async function ingestPayload(
       deliveryStatus: normalized.channel === "delivery" ? "pending" : undefined,
       stations,
     });
+
+    // Aggregator orders bill like any other order: recipes leave the stock room.
+    await deductOrderIngredients(
+      ctx,
+      integration.restaurantId,
+      orderItems.map((item) => ({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+      })),
+      orderId,
+    );
 
     const appliedDeferred = await applyDeferredEvents(
       ctx,

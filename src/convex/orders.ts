@@ -1,6 +1,9 @@
 import { query, mutation } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { resolveStations } from "./aggregatorAdapters";
+import { evaluateCoupon } from "./couponOps";
+import { deductOrderIngredients, round2 } from "./inventoryOps";
 
 export const getByRestaurant = query({
   args: {
@@ -76,23 +79,67 @@ export const create = mutation({
       }),
     ),
     totalAmount: v.number(),
+    couponCode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("orders", {
+    const now = Date.now();
+    const subtotal = round2(args.totalAmount);
+
+    // Coupons are evaluated server-side so a tampered client can never invent
+    // a discount.
+    let appliedCoupon: Doc<"coupons"> | undefined;
+    let discount = 0;
+    if (args.couponCode?.trim()) {
+      const evaluation = await evaluateCoupon(
+        ctx,
+        args.restaurantId,
+        args.couponCode,
+        subtotal,
+        now,
+      );
+      if (!evaluation.ok) throw new Error(evaluation.reason);
+      appliedCoupon = evaluation.coupon;
+      discount = evaluation.discount;
+    }
+
+    const orderId = await ctx.db.insert("orders", {
       restaurantId: args.restaurantId,
       tableId: args.tableId,
       tableLabel: args.tableLabel,
       customerName: args.customerName,
       customerPhone: args.customerPhone,
       items: args.items,
-      totalAmount: args.totalAmount,
+      subtotal,
+      discountAmount: discount > 0 ? discount : undefined,
+      couponCode: appliedCoupon?.code,
+      couponId: appliedCoupon?._id,
+      totalAmount: round2(subtotal - discount),
       status: "received",
       source: "qr",
       channel: "dine_in",
       paymentStatus: "unpaid",
       stations: resolveStations(args.items.map((item) => ({ name: item.name }))),
-      createdAt: Date.now(),
+      createdAt: now,
     });
+
+    if (appliedCoupon) {
+      await ctx.db.patch(appliedCoupon._id, {
+        usedCount: appliedCoupon.usedCount + 1,
+      });
+    }
+
+    // Stock leaves the store room the moment an order is billed.
+    await deductOrderIngredients(
+      ctx,
+      args.restaurantId,
+      args.items.map((item) => ({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+      })),
+      orderId,
+    );
+
+    return orderId;
   },
 });
 
